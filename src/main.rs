@@ -15,12 +15,14 @@ async fn main() {
 }
 #[derive(Template)]
 #[template(path = "hello.html")]
-struct HelloTemplate<'a> {
-    name: &'a str,
+struct HelloTemplate {
+    name: String,
 }
 
 async fn handler() -> impl IntoResponse {
-    let hello_template = HelloTemplate { name: "world" };
+    let hello_template = HelloTemplate {
+        name: "world".to_string(),
+    };
 
     hello_template
 }
