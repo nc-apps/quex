@@ -3,7 +3,223 @@
 {% block title %}Index{% endblock %}
 
 {% block content %}
-  <h1>Index</h1>
-  <p>Hello, world!</p>
-  {% call super() %}
+<h1>System Usability</h1>
+<a href="/">Home</a>
+<form action="/sus" method="post">
+    <fieldset>
+        <legend>I think that I would like to use this system frequently</legend>
+
+        <input type="radio" id="A1" name="Q1" value="1" required/>
+        <label for="A1">1</label>
+
+
+
+        <input type="radio" id="A2" name="Q1" value="2" required/>
+        <label for="A2">2</label>
+
+
+        <input type="radio" id="A3" name="Q1" value="3" required/>
+        <label for="A3">3</label>
+
+        <input type="radio" id="A4" name="Q1" value="4" required/>
+        <label for="A4">4</label>
+
+        <input type="radio" id="A5" name="Q1" value="5" required/>
+        <label for="A5">5</label>
+    </fieldset>
+    <fieldset>
+        <legend>I found the system unnecessarily complex</legend>
+
+        <input type="radio" id="A1" name="Q2" value="1" required/>
+        <label for="A1">1</label>
+
+
+
+        <input type="radio" id="A2" name="Q2" value="2" required/>
+        <label for="A2">2</label>
+
+
+        <input type="radio" id="A3" name="Q2" value="3" required/>
+        <label for="A3">3</label>
+
+        <input type="radio" id="A4" name="Q2" value="4" required/>
+        <label for="A4">4</label>
+
+        <input type="radio" id="A5" name="Q2" value="5" required/>
+        <label for="A5">5</label>
+    </fieldset>
+    <fieldset>
+        <legend>I thought the system was easy to use</legend>
+
+        <input type="radio" id="A1" name="Q3" value="1" required/>
+        <label for="A1">1</label>
+
+
+
+        <input type="radio" id="A2" name="Q3" value="2" required/>
+        <label for="A2">2</label>
+
+
+        <input type="radio" id="A3" name="Q3" value="3" required/>
+        <label for="A3">3</label>
+
+        <input type="radio" id="A4" name="Q3" value="4" required/>
+        <label for="A4">4</label>
+
+        <input type="radio" id="A5" name="Q3" value="5" required/>
+        <label for="A5">5</label>
+    </fieldset>
+    <fieldset>
+        <legend>I think that I would need the support of a technical person to be able
+            to use this system</legend>
+
+        <input type="radio" id="A1" name="Q4" value="1" required/>
+        <label for="A1">1</label>
+
+
+
+        <input type="radio" id="A2" name="Q4" value="2" required/>
+        <label for="A2">2</label>
+
+
+        <input type="radio" id="A3" name="Q4" value="3" required/>
+        <label for="A3">3</label>
+
+        <input type="radio" id="A4" name="Q4" value="4" required/>
+        <label for="A4">4</label>
+
+        <input type="radio" id="A5" name="Q4" value="5" required/>
+        <label for="A5">5</label>
+    </fieldset>
+    <fieldset>
+        <legend>I found the various functions in this system were well integrated</legend>
+
+        <input type="radio" id="A1" name="Q5" value="1" required/>
+        <label for="A1">1</label>
+
+
+
+        <input type="radio" id="A2" name="Q5" value="2" required/>
+        <label for="A2">2</label>
+
+
+        <input type="radio" id="A3" name="Q5" value="3" required/>
+        <label for="A3">3</label>
+
+        <input type="radio" id="A4" name="Q5" value="4" required/>
+        <label for="A4">4</label>
+
+        <input type="radio" id="A5" name="Q5" value="5" required/>
+        <label for="A5">5</label>
+    </fieldset>
+    <fieldset>
+        <legend>I thought there was too much inconsistency in this system</legend>
+
+        <input type="radio" id="A1" name="Q6" value="1" required/>
+        <label for="A1">1</label>
+
+
+
+        <input type="radio" id="A2" name="Q6" value="2" required/>
+        <label for="A2">2</label>
+
+
+        <input type="radio" id="A3" name="Q6" value="3" required/>
+        <label for="A3">3</label>
+
+        <input type="radio" id="A4" name="Q6" value="4" required/>
+        <label for="A4">4</label>
+
+        <input type="radio" id="A5" name="Q6" value="5" required/>
+        <label for="A5">5</label>
+    </fieldset>
+    <fieldset>
+        <legend>I would imagine that most people would learn to use this system very
+            quickly</legend>
+
+        <input type="radio" id="A1" name="Q7" value="1" required/>
+        <label for="A1">1</label>
+
+
+
+        <input type="radio" id="A2" name="Q7" value="2" required/>
+        <label for="A2">2</label>
+
+
+        <input type="radio" id="A3" name="Q7" value="3" required/>
+        <label for="A3">3</label>
+
+        <input type="radio" id="A4" name="Q7" value="4" required/>
+        <label for="A4">4</label>
+
+        <input type="radio" id="A5" name="Q7" value="5" required/>
+        <label for="A5">5</label>
+    </fieldset>
+    <fieldset>
+        <legend>I found the system very cumbersome to use</legend>
+
+        <input type="radio" id="A1" name="Q8" value="1" required/>
+        <label for="A1">1</label>
+
+
+
+        <input type="radio" id="A2" name="Q8" value="2" required/>
+        <label for="A2">2</label>
+
+
+        <input type="radio" id="A3" name="Q8" value="3" required/>
+        <label for="A3">3</label>
+
+        <input type="radio" id="A4" name="Q8" value="4" required/>
+        <label for="A4">4</label>
+
+        <input type="radio" id="A5" name="Q8" value="5" required/>
+        <label for="A5">5</label>
+    </fieldset>
+    <fieldset>
+        <legend>I felt very confident using the system</legend>
+
+        <input type="radio" id="A1" name="Q9" value="1" required/>
+        <label for="A1">1</label>
+
+
+
+        <input type="radio" id="A2" name="Q9" value="2" required/>
+        <label for="A2">2</label>
+
+
+        <input type="radio" id="A3" name="Q9" value="3" required/>
+        <label for="A3">3</label>
+
+        <input type="radio" id="A4" name="Q9" value="4" required/>
+        <label for="A4">4</label>
+
+        <input type="radio" id="A5" name="Q9" value="5" required/>
+        <label for="A5">5</label>
+    </fieldset>
+    <fieldset>
+        <legend>I needed to learn a lot of things before I could get going with this system</legend>
+
+        <input type="radio" id="A1" name="Q10" value="1" required/>
+        <label for="A1">1</label>
+
+
+
+        <input type="radio" id="A2" name="Q10" value="2" required/>
+        <label for="A2">2</label>
+
+
+        <input type="radio" id="A3" name="Q10" value="3" required/>
+        <label for="A3">3</label>
+
+        <input type="radio" id="A4" name="Q10" value="4" required/>
+        <label for="A4">4</label>
+
+        <input type="radio" id="A5" name="Q10" value="5" required/>
+        <label for="A5">5</label>
+    </fieldset>
+    <button type="submit">Submit</button>
+</form>
+
+{% call super() %}
 {% endblock %}
