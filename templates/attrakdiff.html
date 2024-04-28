@@ -1,9 +1,29 @@
-{% extends "layout.html" %}
+{% extends "layout.html" %} {% block title %}Index{% endblock %} {% block
+content %}
+<h1>AtrrakDiff</h1>
+<a href="/">Home</a>
+<form action="/attrakdiff" method="post">
+    {% for question in questions %}
 
-{% block title %}Index{% endblock %}
-
-{% block content %}
-  <h1>AtrrakDiff</h1>
-  <a href="/">Home</a>
-  {% call super() %}
-{% endblock %}
+    <fieldset>
+        <span>{{ question.0 }}</span>
+        <input type="radio" id="Q11" name="Q1" value="1" />
+        <label for="Q11">1</label>
+        <input type="radio" id="Q12" name="Q1" value="2" />
+        <label for="Q12">2</label>
+        <input type="radio" id="Q13" name="Q1" value="3" />
+        <label for="Q13">3</label>
+        <input type="radio" id="Q14" name="Q1" value="4" />
+        <label for="Q14">4</label>
+        <input type="radio" id="Q15" name="Q1" value="5" />
+        <label for="Q15">5</label>
+        <input type="radio" id="Q16" name="Q1" value="6" />
+        <label for="Q16">6</label>
+        <input type="radio" id="Q17" name="Q1" value="7" />
+        <label for="Q17">7</label>
+        <span>{{ question.1 }}</span>
+    </fieldset>
+    {% endfor %}
+    <button type="submit">Submit</button>
+</form>
+{% call super() %} {% endblock %}
