@@ -1,0 +1,49 @@
+{% extends "layout.html" %}
+
+{% block title %}Index{% endblock %}
+
+{% block content %}
+<h1>Net Promoter Score</h1>
+<a href="/">Home</a>
+<form action="/nps" method="post">
+  <fieldset>
+    <legend>How likely are you to recommend us on a scale from 0 to 10?</legend>
+
+    <input type="radio" id="A1" name="Q1" value="1" required/>
+    <label for="A1">1</label>
+
+    <input type="radio" id="A2" name="Q1" value="2" required/>
+    <label for="A2">2</label>
+
+    <input type="radio" id="A3" name="Q1" value="3" required/>
+    <label for="A3">3</label>
+
+    <input type="radio" id="A4" name="Q1" value="4" required/>
+    <label for="A4">4</label>
+
+    <input type="radio" id="A5" name="Q1" value="5" required/>
+    <label for="A5">5</label>
+
+    <input type="radio" id="A6" name="Q1" value="6" required/>
+    <label for="A6">6</label>
+
+    <input type="radio" id="A7" name="Q1" value="7" required/>
+    <label for="A7">7</label>
+
+    <input type="radio" id="A8" name="Q1" value="8" required/>
+    <label for="A8">8</label>
+
+    <input type="radio" id="A9" name="Q1" value="9" required/>
+    <label for="A9">9</label>
+
+    <input type="radio" id="A10" name="Q1" value="10" required/>
+    <label for="A10">10</label>
+  </fieldset>
+  <fieldset>
+    <legend>And why?</legend>
+    <textarea name="Q2" id="A22" required></textarea>
+  </fieldset>
+  <button type="submit">Submit</button>
+</form>
+{% call super() %}
+{% endblock %}

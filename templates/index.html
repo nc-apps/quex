@@ -1,0 +1,11 @@
+{% extends "layout.html" %}
+   {% block title %} Home {% endblock %}
+
+{% block content %}
+  <h1>Quex</h1>
+  <p>This is the startig page of quex, welcome!</p>
+  <a href="/nps">Net Promoter Score</a>
+  <a href="/sus">System Usability</a>
+  <a href="/attrakdiff">AttrakDiff</a>
+  {% call super() %}
+{% endblock %}
