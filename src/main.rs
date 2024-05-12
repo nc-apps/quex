@@ -1,14 +1,22 @@
 use askama_axum::{IntoResponse, Template};
-use axum::{routing::get, Router};
+use axum::{
+    response::Redirect,
+    routing::{get, post},
+    Router,
+};
 
 #[tokio::main]
 async fn main() {
     // build our application with a route
     let app = Router::new()
         .route("/", get(handler))
-        .route("/nps", get(nps_handler))
-        .route("/sus", get(sus_handler))
-        .route("/attrakdiff", get(attrakdiff_handler));
+        .route("/nps", get(nps_handler).post(create_nps))
+        .route("/sus", get(sus_handler).post(create_sus))
+        .route(
+            "/attrakdiff",
+            get(attrakdiff_handler).post(create_attrakdiff),
+        );
+
     // run it
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
         .await
@@ -89,4 +97,16 @@ async fn attrakdiff_handler() -> impl IntoResponse {
     };
 
     attrakdiff_template
+}
+
+async fn create_attrakdiff() -> impl IntoResponse {
+    Redirect::to("/")
+}
+
+async fn create_nps() -> impl IntoResponse {
+    Redirect::to("/")
+}
+
+async fn create_sus() -> impl IntoResponse {
+    Redirect::to("/")
 }
