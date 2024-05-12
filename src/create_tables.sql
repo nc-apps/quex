@@ -1,26 +1,29 @@
-CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL);
-
-CREATE TABLE system_usability_score (
+CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY,
-    answer_1 INTEGER NOT NULL, 
-    answer_2 INTEGER NOT NULL, 
-    answer_3 INTEGER NOT NULL, 
-    answer_4 INTEGER NOT NULL, 
-    answer_5 INTEGER NOT NULL, 
-    answer_6 INTEGER NOT NULL, 
-    answer_7 INTEGER NOT NULL, 
-    answer_8 INTEGER NOT NULL, 
-    answer_9 INTEGER NOT NULL, 
+    name TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS system_usability_score (
+    id INTEGER PRIMARY KEY,
+    answer_1 INTEGER NOT NULL,
+    answer_2 INTEGER NOT NULL,
+    answer_3 INTEGER NOT NULL,
+    answer_4 INTEGER NOT NULL,
+    answer_5 INTEGER NOT NULL,
+    answer_6 INTEGER NOT NULL,
+    answer_7 INTEGER NOT NULL,
+    answer_8 INTEGER NOT NULL,
+    answer_9 INTEGER NOT NULL,
     answer_10 INTEGER NOT NULL
 );
 
-CREATE TABLE net_promoter_score (
+CREATE TABLE IF NOT EXISTS net_promoter_score (
     id INTEGER PRIMARY KEY,
     answer_1 INTEGER NOT NULL,
     answer_2 TEXT
 );
 
-CREATE TABLE attrakdiff (
+CREATE TABLE IF NOT EXISTS attrakdiff (
     id INTEGER PRIMARY KEY,
     answer_1 INTEGER NOT NULL,
     answer_2 INTEGER NOT NULL,
