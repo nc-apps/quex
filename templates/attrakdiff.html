@@ -7,19 +7,19 @@ content %}
 
     <fieldset>
         <span>{{ question.0 }}</span>
-        <input type="radio" id="Q11" name="Q1" value="1" />
+        <input type="radio" id="Q11" name="Q{{ loop.index }}" value="1" required />
         <label for="Q11">1</label>
-        <input type="radio" id="Q12" name="Q1" value="2" />
+        <input type="radio" id="Q12" name="Q{{ loop.index }}" value="2" required />
         <label for="Q12">2</label>
-        <input type="radio" id="Q13" name="Q1" value="3" />
+        <input type="radio" id="Q13" name="Q{{ loop.index }}" value="3" required />
         <label for="Q13">3</label>
-        <input type="radio" id="Q14" name="Q1" value="4" />
+        <input type="radio" id="Q14" name="Q{{ loop.index }}" value="4" required />
         <label for="Q14">4</label>
-        <input type="radio" id="Q15" name="Q1" value="5" />
+        <input type="radio" id="Q15" name="Q{{ loop.index }}" value="5" required />
         <label for="Q15">5</label>
-        <input type="radio" id="Q16" name="Q1" value="6" />
+        <input type="radio" id="Q16" name="Q{{ loop.index }}" value="6" required />
         <label for="Q16">6</label>
-        <input type="radio" id="Q17" name="Q1" value="7" />
+        <input type="radio" id="Q17" name="Q{{ loop.index }}" value="7" required />
         <label for="Q17">7</label>
         <span>{{ question.1 }}</span>
     </fieldset>
