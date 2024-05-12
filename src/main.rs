@@ -1,12 +1,34 @@
+use std::env;
+
 use askama_axum::{IntoResponse, Template};
-use axum::{
-    response::Redirect,
-    routing::{get, post},
-    Router,
-};
+use axum::{extract::State, response::Redirect, routing::get, Form, Router};
+use dotenv::dotenv;
+use libsql::{Builder, Connection};
+use serde::Deserialize;
 
 #[tokio::main]
 async fn main() {
+    dotenv().ok();
+    let url = env::var("TURSO_DATABASE_URL")
+        .expect("TURSO_DATABASE_URL environment variable must be set. Did you forget to set up the .env file?");
+    let token = env::var("TURSO_AUTH_TOKEN").unwrap_or_default();
+    let database = Builder::new_remote(url, token)
+        .build()
+        .await
+        .expect("Failed to connect to database");
+
+    let connection = database.connect().unwrap();
+
+    let query = include_str!("./create_tables.sql");
+    connection
+        .execute(&query, ())
+        .await
+        .expect("Failed to create tables");
+
+    println!("Tables created");
+
+    let app_state = AppState { connection };
+
     // build our application with a route
     let app = Router::new()
         .route("/", get(handler))
@@ -15,7 +37,8 @@ async fn main() {
         .route(
             "/attrakdiff",
             get(attrakdiff_handler).post(create_attrakdiff),
-        );
+        )
+        .with_state(app_state);
 
     // run it
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
@@ -99,11 +122,39 @@ async fn attrakdiff_handler() -> impl IntoResponse {
     attrakdiff_template
 }
 
+#[derive(Deserialize, Debug)]
+struct NpsAnswers {
+    #[serde(rename = "Q1")]
+    q1: u8,
+    #[serde(rename = "Q2")]
+    q2: String,
+}
+
 async fn create_attrakdiff() -> impl IntoResponse {
     Redirect::to("/")
 }
+#[derive(Clone)]
+struct AppState {
+    connection: Connection,
+}
 
-async fn create_nps() -> impl IntoResponse {
+async fn create_nps(
+    State(app_state): State<AppState>,
+    Form(nps_answers): Form<NpsAnswers>,
+) -> impl IntoResponse {
+    println!("Answers for NPS: {:?}", nps_answers);
+
+    app_state
+        .connection
+        .execute(
+            "INSERT INTO net_promoter_score (answer_1, answer_2) VALUES (?1, ?2)",
+            libsql::params![nps_answers.q1, nps_answers.q2],
+        )
+        .await
+        .expect("Failed to insert into database");
+
+    println!("Inserted into database");
+
     Redirect::to("/")
 }
 
