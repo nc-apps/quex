@@ -1,3 +1,5 @@
+BEGIN;
+
 CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY,
     name TEXT NOT NULL
@@ -54,3 +56,5 @@ CREATE TABLE IF NOT EXISTS attrakdiff (
     answer_27 INTEGER NOT NULL,
     answer_28 INTEGER NOT NULL
 );
+
+END;
