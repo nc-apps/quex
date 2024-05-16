@@ -21,7 +21,7 @@ async fn main() {
 
     let query = include_str!("./create_tables.sql");
     connection
-        .execute(&query, ())
+        .execute_batch(&query)
         .await
         .expect("Failed to create tables");
 
