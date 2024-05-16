@@ -130,7 +130,195 @@ struct NpsAnswers {
     q2: String,
 }
 
-async fn create_attrakdiff() -> impl IntoResponse {
+#[derive(Deserialize, Debug)]
+struct AttrakDiffAnswers {
+    #[serde(rename = "Q1")]
+    q1: u8,
+    #[serde(rename = "Q2")]
+    q2: u8,
+    #[serde(rename = "Q3")]
+    q3: u8,
+    #[serde(rename = "Q4")]
+    q4: u8,
+    #[serde(rename = "Q5")]
+    q5: u8,
+    #[serde(rename = "Q6")]
+    q6: u8,
+    #[serde(rename = "Q7")]
+    q7: u8,
+    #[serde(rename = "Q8")]
+    q8: u8,
+    #[serde(rename = "Q9")]
+    q9: u8,
+    #[serde(rename = "Q10")]
+    q10: u8,
+    #[serde(rename = "Q11")]
+    q11: u8,
+    #[serde(rename = "Q12")]
+    q12: u8,
+    #[serde(rename = "Q13")]
+    q13: u8,
+    #[serde(rename = "Q14")]
+    q14: u8,
+    #[serde(rename = "Q15")]
+    q15: u8,
+    #[serde(rename = "Q16")]
+    q16: u8,
+    #[serde(rename = "Q17")]
+    q17: u8,
+    #[serde(rename = "Q18")]
+    q18: u8,
+    #[serde(rename = "Q19")]
+    q19: u8,
+    #[serde(rename = "Q20")]
+    q20: u8,
+    #[serde(rename = "Q21")]
+    q21: u8,
+    #[serde(rename = "Q22")]
+    q22: u8,
+    #[serde(rename = "Q23")]
+    q23: u8,
+    #[serde(rename = "Q24")]
+    q24: u8,
+    #[serde(rename = "Q25")]
+    q25: u8,
+    #[serde(rename = "Q26")]
+    q26: u8,
+    #[serde(rename = "Q27")]
+    q27: u8,
+    #[serde(rename = "Q28")]
+    q28: u8,
+}
+
+#[derive(Deserialize, Debug)]
+struct SusAnswers {
+    #[serde(rename = "Q1")]
+    q1: u8,
+    #[serde(rename = "Q2")]
+    q2: u8,
+    #[serde(rename = "Q3")]
+    q3: u8,
+    #[serde(rename = "Q4")]
+    q4: u8,
+    #[serde(rename = "Q5")]
+    q5: u8,
+    #[serde(rename = "Q6")]
+    q6: u8,
+    #[serde(rename = "Q7")]
+    q7: u8,
+    #[serde(rename = "Q8")]
+    q8: u8,
+    #[serde(rename = "Q9")]
+    q9: u8,
+    #[serde(rename = "Q10")]
+    q10: u8,
+}
+
+async fn create_attrakdiff(
+    State(app_state): State<AppState>,
+    Form(attrakdiff_answers): Form<AttrakDiffAnswers>,
+) -> impl IntoResponse {
+    println!("Answers for AtrrakDiff: {:?}", attrakdiff_answers);
+
+    app_state
+        .connection
+        .execute(
+            // insert ansewrs 1 to 28 into database
+            "INSERT INTO attrakdiff (
+                answer_1, 
+                answer_2, 
+                answer_3, 
+                answer_4, 
+                answer_5, 
+                answer_6, 
+                answer_7, 
+                answer_8, 
+                answer_9,
+                answer_10,
+                answer_11,
+                answer_12,
+                answer_13,
+                answer_14,
+                answer_15,
+                answer_16,
+                answer_17,
+                answer_18,
+                answer_19,
+                answer_20,
+                answer_21,
+                answer_22,
+                answer_23,
+                answer_24,
+                answer_25,
+                answer_26,
+                answer_27,
+                answer_28
+            ) VALUES (
+                ?1, 
+                ?2, 
+                ?3, 
+                ?4, 
+                ?5, 
+                ?6, 
+                ?7, 
+                ?8, 
+                ?9,
+                ?10,
+                ?11,
+                ?12,
+                ?13,
+                ?14,
+                ?15,
+                ?16,
+                ?17,
+                ?18,
+                ?19,
+                ?20,
+                ?21,
+                ?22,
+                ?23,
+                ?24,
+                ?25,
+                ?26,
+                ?27,
+                ?28
+            )",
+            libsql::params![
+                attrakdiff_answers.q1,
+                attrakdiff_answers.q2,
+                attrakdiff_answers.q3,
+                attrakdiff_answers.q4,
+                attrakdiff_answers.q5,
+                attrakdiff_answers.q6,
+                attrakdiff_answers.q7,
+                attrakdiff_answers.q8,
+                attrakdiff_answers.q9,
+                attrakdiff_answers.q10,
+                attrakdiff_answers.q11,
+                attrakdiff_answers.q12,
+                attrakdiff_answers.q13,
+                attrakdiff_answers.q14,
+                attrakdiff_answers.q15,
+                attrakdiff_answers.q16,
+                attrakdiff_answers.q17,
+                attrakdiff_answers.q18,
+                attrakdiff_answers.q19,
+                attrakdiff_answers.q20,
+                attrakdiff_answers.q21,
+                attrakdiff_answers.q22,
+                attrakdiff_answers.q23,
+                attrakdiff_answers.q24,
+                attrakdiff_answers.q25,
+                attrakdiff_answers.q26,
+                attrakdiff_answers.q27,
+                attrakdiff_answers.q28,
+            ],
+        )
+        .await
+        .expect("Failed to insert into database");
+
+    println!("Inserted into database");
+
     Redirect::to("/")
 }
 #[derive(Clone)]
@@ -158,6 +346,54 @@ async fn create_nps(
     Redirect::to("/")
 }
 
-async fn create_sus() -> impl IntoResponse {
+async fn create_sus(
+    State(app_state): State<AppState>,
+    Form(sus_answers): Form<SusAnswers>,
+) -> impl IntoResponse {
+    println!("Answers for SUS: {:?}", sus_answers);
+
+    app_state
+        .connection
+        .execute(
+            "INSERT INTO system_usability_score (
+                answer_1, 
+                answer_2, 
+                answer_3, 
+                answer_4, 
+                answer_5,
+                answer_6, 
+                answer_7, 
+                answer_8, 
+                answer_9, 
+                answer_10
+            ) VALUES (
+                ?1, 
+                ?2, 
+                ?3, 
+                ?4, 
+                ?5, 
+                ?6, 
+                ?7, 
+                ?8, 
+                ?9, 
+                ?10)",
+            libsql::params![
+                sus_answers.q1,
+                sus_answers.q2,
+                sus_answers.q3,
+                sus_answers.q4,
+                sus_answers.q5,
+                sus_answers.q6,
+                sus_answers.q7,
+                sus_answers.q8,
+                sus_answers.q9,
+                sus_answers.q10
+            ],
+        )
+        .await
+        .expect("Failed to insert into database");
+
+    println!("Inserted into database");
+
     Redirect::to("/")
 }
