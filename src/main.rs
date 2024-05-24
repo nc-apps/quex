@@ -9,7 +9,7 @@ use axum_extra::extract::{
 use dotenv::dotenv;
 use libsql::{Builder, Connection};
 use serde::Deserialize;
-use time::OffsetDateTime;
+use tower_http::services::ServeDir;
 
 #[tokio::main]
 async fn main() {
@@ -34,6 +34,7 @@ async fn main() {
 
     let app_state = AppState { connection };
 
+    let serve_directory = ServeDir::new("public");
     // build our application with a route
     let app = Router::new()
         .route("/", get(handler))
@@ -46,6 +47,8 @@ async fn main() {
         .route("/signup", get(sign_up_handler).post(create_account))
         .route("/signin", get(sign_in_handler).post(sign_in))
         .route("/surveys", get(surveys_page))
+        // If the route could not be matched it might be a file
+        .fallback_service(serve_directory)
         .with_state(app_state);
 
     // run it
