@@ -1,10 +1,15 @@
 use std::env;
 
 use askama_axum::{IntoResponse, Template};
-use axum::{extract::State, response::Redirect, routing::get, Form, Router};
+use axum::{extract::State, http::StatusCode, response::Redirect, routing::get, Form, Router};
+use axum_extra::extract::{
+    cookie::{Cookie, SameSite},
+    CookieJar,
+};
 use dotenv::dotenv;
 use libsql::{Builder, Connection};
 use serde::Deserialize;
+use time::OffsetDateTime;
 
 #[tokio::main]
 async fn main() {
@@ -38,8 +43,9 @@ async fn main() {
             "/attrakdiff",
             get(attrakdiff_handler).post(create_attrakdiff),
         )
-        .route("/signup", get(sign_up_handler).post(create_sign_up))
-        .route("/signin", get(sign_in_handler).post(create_sign_in))
+        .route("/signup", get(sign_up_handler).post(create_account))
+        .route("/signin", get(sign_in_handler).post(sign_in))
+        .route("/surveys", get(surveys_page))
         .with_state(app_state);
 
     // run it
@@ -138,7 +144,7 @@ async fn sign_up_handler() -> impl IntoResponse {
     sign_up_template
 }
 
-async fn signin_handler() -> impl IntoResponse {
+async fn sign_in_handler() -> impl IntoResponse {
     let sign_in_template = SignInTemplate {};
 
     sign_in_template
@@ -247,14 +253,14 @@ async fn create_attrakdiff(
         .execute(
             // insert ansewrs 1 to 28 into database
             "INSERT INTO attrakdiff_responses (
-                answer_1, 
-                answer_2, 
-                answer_3, 
-                answer_4, 
-                answer_5, 
-                answer_6, 
-                answer_7, 
-                answer_8, 
+                answer_1,
+                answer_2,
+                answer_3,
+                answer_4,
+                answer_5,
+                answer_6,
+                answer_7,
+                answer_8,
                 answer_9,
                 answer_10,
                 answer_11,
@@ -276,14 +282,14 @@ async fn create_attrakdiff(
                 answer_27,
                 answer_28
             ) VALUES (
-                ?1, 
-                ?2, 
-                ?3, 
-                ?4, 
-                ?5, 
-                ?6, 
-                ?7, 
-                ?8, 
+                ?1,
+                ?2,
+                ?3,
+                ?4,
+                ?5,
+                ?6,
+                ?7,
+                ?8,
                 ?9,
                 ?10,
                 ?11,
@@ -378,26 +384,26 @@ async fn create_sus(
         .connection
         .execute(
             "INSERT INTO system_usability_score_responses (
-                answer_1, 
-                answer_2, 
-                answer_3, 
-                answer_4, 
+                answer_1,
+                answer_2,
+                answer_3,
+                answer_4,
                 answer_5,
-                answer_6, 
-                answer_7, 
-                answer_8, 
-                answer_9, 
+                answer_6,
+                answer_7,
+                answer_8,
+                answer_9,
                 answer_10
             ) VALUES (
-                ?1, 
-                ?2, 
-                ?3, 
-                ?4, 
-                ?5, 
-                ?6, 
-                ?7, 
-                ?8, 
-                ?9, 
+                ?1,
+                ?2,
+                ?3,
+                ?4,
+                ?5,
+                ?6,
+                ?7,
+                ?8,
+                ?9,
                 ?10)",
             libsql::params![
                 sus_answers.q1,
@@ -420,10 +426,57 @@ async fn create_sus(
     Redirect::to("/")
 }
 
-async fn create_sign_up() -> impl IntoResponse {
+#[derive(Deserialize, Debug)]
+struct CreateAccountRequest {
+    username: String,
+}
+
+async fn create_account(
+    State(app_state): State<AppState>,
+    Form(create_account_request): Form<CreateAccountRequest>,
+) -> impl IntoResponse {
+    app_state
+        .connection
+        .execute(
+            "INSERT INTO researchers (name) VALUES (?1)",
+            libsql::params![create_account_request.username],
+        )
+        .await
+        .expect("Failed to insert into database");
+
     Redirect::to("/")
 }
 
-async fn create_sign_in() -> impl IntoResponse {
-    Redirect::to("/")
+#[derive(Deserialize, Debug)]
+struct SignInRequest {
+    username: String,
+}
+
+async fn sign_in(
+    jar: CookieJar,
+    Form(sign_in_request): Form<SignInRequest>,
+) -> (CookieJar, Redirect) {
+    //TODO authentication
+    let cookie = Cookie::build(("user", sign_in_request.username))
+        .path("/")
+        .secure(true)
+        .http_only(true)
+        // Prevents CRSF attack
+        .same_site(SameSite::Strict)
+        .expires(time::OffsetDateTime::now_utc() + time::Duration::days(1));
+
+    (jar.add(cookie), Redirect::to("/"))
+}
+
+#[derive(Template)]
+#[template(path = "surveys.html")]
+struct SurveysTemplate {}
+
+async fn surveys_page() -> impl IntoResponse {
+    let surveys_template = SurveysTemplate {};
+    //TODO identify user with cookie
+    //TODO query database for surveys by user
+    //TODO add surveys to template
+    //TODO render surveys in template
+    surveys_template
 }
