@@ -38,6 +38,8 @@ async fn main() {
             "/attrakdiff",
             get(attrakdiff_handler).post(create_attrakdiff),
         )
+        .route("/signup", get(sign_up_handler).post(create_signup))
+        .route("/login", get(login_handler).post(create_login))
         .with_state(app_state);
 
     // run it
@@ -64,6 +66,14 @@ struct SusTemplate {}
 struct AtrrakDiffTemplate {
     questions: Vec<(String, String)>,
 }
+
+#[derive(Template)]
+#[template(path = "sign_up.html")]
+struct SignUpTemplate {}
+
+#[derive(Template)]
+#[template(path = "login.html")]
+struct LoginTemplate {}
 
 async fn handler() -> impl IntoResponse {
     let index_template = IndexTemplate {};
@@ -120,6 +130,18 @@ async fn attrakdiff_handler() -> impl IntoResponse {
     };
 
     attrakdiff_template
+}
+
+async fn sign_up_handler() -> impl IntoResponse {
+    let sign_up_template = SignUpTemplate {};
+
+    sign_up_template
+}
+
+async fn login_handler() -> impl IntoResponse {
+    let login_template = LoginTemplate {};
+
+    login_template
 }
 
 #[derive(Deserialize, Debug)]
@@ -395,5 +417,13 @@ async fn create_sus(
 
     println!("Inserted into database");
 
+    Redirect::to("/")
+}
+
+async fn create_signup() -> impl IntoResponse {
+    Redirect::to("/")
+}
+
+async fn create_login() -> impl IntoResponse {
     Redirect::to("/")
 }
