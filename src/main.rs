@@ -38,8 +38,8 @@ async fn main() {
             "/attrakdiff",
             get(attrakdiff_handler).post(create_attrakdiff),
         )
-        .route("/signup", get(sign_up_handler).post(create_signup))
-        .route("/signin", get(signin_handler).post(create_signin))
+        .route("/signup", get(sign_up_handler).post(create_sign_up))
+        .route("/signin", get(sign_in_handler).post(create_sign_in))
         .with_state(app_state);
 
     // run it
@@ -139,9 +139,9 @@ async fn sign_up_handler() -> impl IntoResponse {
 }
 
 async fn signin_handler() -> impl IntoResponse {
-    let signin_template = SignInTemplate {};
+    let sign_in_template = SignInTemplate {};
 
-    signin_template
+    sign_in_template
 }
 
 #[derive(Deserialize, Debug)]
@@ -420,10 +420,10 @@ async fn create_sus(
     Redirect::to("/")
 }
 
-async fn create_signup() -> impl IntoResponse {
+async fn create_sign_up() -> impl IntoResponse {
     Redirect::to("/")
 }
 
-async fn create_signin() -> impl IntoResponse {
+async fn create_sign_in() -> impl IntoResponse {
     Redirect::to("/")
 }
