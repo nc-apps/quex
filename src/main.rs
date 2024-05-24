@@ -39,7 +39,7 @@ async fn main() {
             get(attrakdiff_handler).post(create_attrakdiff),
         )
         .route("/signup", get(sign_up_handler).post(create_signup))
-        .route("/login", get(login_handler).post(create_login))
+        .route("/signin", get(signin_handler).post(create_signin))
         .with_state(app_state);
 
     // run it
@@ -72,8 +72,8 @@ struct AtrrakDiffTemplate {
 struct SignUpTemplate {}
 
 #[derive(Template)]
-#[template(path = "login.html")]
-struct LoginTemplate {}
+#[template(path = "sign_in.html")]
+struct SignInTemplate {}
 
 async fn handler() -> impl IntoResponse {
     let index_template = IndexTemplate {};
@@ -138,10 +138,10 @@ async fn sign_up_handler() -> impl IntoResponse {
     sign_up_template
 }
 
-async fn login_handler() -> impl IntoResponse {
-    let login_template = LoginTemplate {};
+async fn signin_handler() -> impl IntoResponse {
+    let signin_template = SignInTemplate {};
 
-    login_template
+    signin_template
 }
 
 #[derive(Deserialize, Debug)]
@@ -424,6 +424,6 @@ async fn create_signup() -> impl IntoResponse {
     Redirect::to("/")
 }
 
-async fn create_login() -> impl IntoResponse {
+async fn create_signin() -> impl IntoResponse {
     Redirect::to("/")
 }
