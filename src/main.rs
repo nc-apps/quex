@@ -224,7 +224,7 @@ async fn create_attrakdiff(
         .connection
         .execute(
             // insert ansewrs 1 to 28 into database
-            "INSERT INTO attrakdiff (
+            "INSERT INTO attrakdiff_responses (
                 answer_1, 
                 answer_2, 
                 answer_3, 
@@ -335,7 +335,7 @@ async fn create_nps(
     app_state
         .connection
         .execute(
-            "INSERT INTO net_promoter_score (answer_1, answer_2) VALUES (?1, ?2)",
+            "INSERT INTO net_promoter_score_responses (answer_1, answer_2) VALUES (?1, ?2)",
             libsql::params![nps_answers.q1, nps_answers.q2],
         )
         .await
@@ -355,7 +355,7 @@ async fn create_sus(
     app_state
         .connection
         .execute(
-            "INSERT INTO system_usability_score (
+            "INSERT INTO system_usability_score_responses (
                 answer_1, 
                 answer_2, 
                 answer_3, 
