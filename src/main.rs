@@ -1,15 +1,28 @@
-use std::env;
+use std::{env, net::Ipv4Addr};
 
 use askama_axum::{IntoResponse, Template};
-use axum::{extract::State, http::StatusCode, response::Redirect, routing::get, Form, Router};
+use axum::{
+    extract::{Path, State},
+    http::{uri::Port, Uri},
+    response::Redirect,
+    routing::get,
+    Form, Json, Router,
+};
 use axum_extra::extract::{
     cookie::{Cookie, SameSite},
     CookieJar,
 };
+use base64::prelude::*;
 use dotenv::dotenv;
-use libsql::{Builder, Connection};
-use serde::Deserialize;
+use email::Email;
+use libsql::{named_params, Builder, Connection};
+use nanoid::nanoid;
+use ring::rand::{SecureRandom, SystemRandom};
+use serde::{Deserialize, Serialize};
+use serde_repr::Serialize_repr;
 use tower_http::services::ServeDir;
+
+mod email;
 
 #[tokio::main]
 async fn main() {
@@ -32,10 +45,24 @@ async fn main() {
 
     println!("Tables created");
 
-    let app_state = AppState { connection };
+    // Configuration
+    //TODO implmement fallback to localhost
+    //TODO implement warning that users can not follow links (e.g. in emails) if host is localhost or 127.0.0.1
+    let url = env::var("QUEX_URL").expect("QUEX_URL environment variable must be set");
+
+    let url = Uri::try_from(url).expect("Invalid URL in QUEX_URL environment variable");
+    let port = url.port().map(|port| port.as_u16()).unwrap_or(80);
+    let configuration = Configuration { server_url: url };
+
+    let client = reqwest::Client::new();
+    let app_state = AppState {
+        connection,
+        client,
+        configuration,
+    };
 
     let serve_directory = ServeDir::new("public");
-    // build our application with a route
+    // Build our application with a route
     let app = Router::new()
         .route("/", get(handler))
         .route("/nps", get(nps_handler).post(create_nps))
@@ -45,14 +72,17 @@ async fn main() {
             get(attrakdiff_handler).post(create_attrakdiff),
         )
         .route("/signup", get(sign_up_handler).post(create_account))
+        .route("/signup/completed", get(signup_completed))
         .route("/signin", get(sign_in_handler).post(sign_in))
+        .route("/signin/:attempt_id", get(complete_signin))
         .route("/surveys", get(surveys_page))
+        .route("/challenge", get(get_challenge))
         // If the route could not be matched it might be a file
         .fallback_service(serve_directory)
         .with_state(app_state);
 
-    // run it
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
+    // Run the server
+    let listener = tokio::net::TcpListener::bind((Ipv4Addr::new(127, 0, 0, 1), port))
         .await
         .unwrap();
     println!("listening on http://{}", listener.local_addr().unwrap());
@@ -95,6 +125,7 @@ async fn nps_handler() -> impl IntoResponse {
 
     nps_template
 }
+
 async fn sus_handler() -> impl IntoResponse {
     let sus_template = SusTemplate {};
 
@@ -352,9 +383,17 @@ async fn create_attrakdiff(
 
     Redirect::to("/")
 }
+
+#[derive(Clone)]
+struct Configuration {
+    server_url: Uri,
+}
+
 #[derive(Clone)]
 struct AppState {
     connection: Connection,
+    client: reqwest::Client,
+    configuration: Configuration,
 }
 
 async fn create_nps(
@@ -431,23 +470,123 @@ async fn create_sus(
 
 #[derive(Deserialize, Debug)]
 struct CreateAccountRequest {
-    username: String,
+    email: String,
+    name: String,
 }
 
 async fn create_account(
-    State(app_state): State<AppState>,
-    Form(create_account_request): Form<CreateAccountRequest>,
+    State(AppState {
+        connection,
+        configuration,
+        client,
+    }): State<AppState>,
+    Form(request): Form<CreateAccountRequest>,
 ) -> impl IntoResponse {
-    app_state
-        .connection
+    //TODO check if user aleady exists
+    let user_id = nanoid!();
+    connection
         .execute(
-            "INSERT INTO researchers (name) VALUES (?1)",
-            libsql::params![create_account_request.username],
+            "INSERT INTO researchers (id, name, email_address) VALUES (:id, :name, :email_address)",
+            named_params![
+                ":id": user_id.clone(),
+                ":name": request.name,
+                ":email_address": request.email.clone(),
+            ],
         )
         .await
-        .expect("Failed to insert into database");
+        .unwrap();
 
-    Redirect::to("/")
+    let attempt_id = nanoid!();
+    let expires_at = time::OffsetDateTime::now_utc() + time::Duration::minutes(15);
+    let expires_at = expires_at.unix_timestamp();
+    connection
+        .execute(
+            "INSERT INTO signin_attempts VALUES (:id, :researcher_id, :expires_at)",
+            named_params![
+                ":id": attempt_id.clone(),
+                ":researcher_id": user_id,
+                ":expires_at": expires_at,
+            ],
+        )
+        .await
+        .unwrap();
+
+    //TODO email adress validation
+    email::send_sign_in_email(
+        Email(request.email),
+        &client,
+        attempt_id,
+        configuration.server_url,
+    )
+    .await
+    .unwrap();
+
+    Redirect::to("/signup/completed")
+}
+
+async fn complete_signin(
+    State(AppState { connection, .. }): State<AppState>,
+    jar: CookieJar,
+    Path(attempt_id): Path<String>,
+) -> impl IntoResponse {
+    // Check if sign in attempt exists
+    let mut rows = connection
+        .query(
+            "SELECT researcher_id, expires_at_utc FROM signin_attempts WHERE id = :id",
+            named_params![":id": attempt_id],
+        )
+        .await
+        .unwrap();
+
+    let Some(row) = rows.next().await.unwrap() else {
+        //TODO display error link has expired (even if it did not exist in the first place)
+        // Don't give away if the link existed or not
+        return Redirect::to("/signin").into_response();
+    };
+
+    let expires_at: i64 = row.get(1).unwrap();
+    if expires_at < time::OffsetDateTime::now_utc().unix_timestamp() {
+        //TODO display error link has expired
+        return Redirect::to("/signin").into_response();
+    }
+
+    let researcher_id: String = row.get(0).unwrap();
+    // Create session
+    let session_id = nanoid!();
+    //TODO decide how long a session should live
+    let expires_at = time::OffsetDateTime::now_utc() + time::Duration::days(30);
+
+    connection
+        .execute(
+            "INSERT INTO sessions (id, researcher_id, expires_at_utc) VALUES (:id, :researcher_id, :expires_at_utc)",
+            named_params![
+                ":id": session_id.clone(),
+                ":researcher_id": researcher_id,
+                ":expires_at_utc": expires_at.unix_timestamp(),
+            ],
+        )
+        .await
+        .unwrap();
+
+    // Set session cookie
+    //TODO should the cookie be encrypted?
+    let cookie = Cookie::build(("session", session_id))
+        .path("/")
+        .secure(true)
+        .http_only(true)
+        .same_site(SameSite::Strict)
+        .expires(expires_at);
+
+    (jar.add(cookie), Redirect::to("/")).into_response()
+}
+
+#[derive(Template)]
+#[template(path = "signup_completed.html")]
+struct SignupCompletedTemplate {}
+
+async fn signup_completed() -> impl IntoResponse {
+    let sign_up_completed_template = SignupCompletedTemplate {};
+    sign_up_completed_template
 }
 
 #[derive(Deserialize, Debug)]
@@ -482,4 +621,85 @@ async fn surveys_page() -> impl IntoResponse {
     //TODO add surveys to template
     //TODO render surveys in template
     surveys_template
+}
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+struct RelyingParty {
+    id: String,
+    name: String,
+}
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+struct User {
+    id: String,
+    name: String,
+    display_name: String,
+}
+
+#[derive(Debug, Serialize_repr)]
+#[repr(i16)]
+enum Algorithm {
+    Ed25519 = -8,
+    ES256 = -7,
+    RS256 = -257,
+}
+
+#[derive(Serialize, Debug)]
+enum PublicKeyCredentialType {
+    #[serde(rename = "public-key")]
+    PublicKey,
+}
+
+#[derive(Serialize, Debug)]
+struct PublicKeyCredentialParameters {
+    #[serde(rename = "alg")]
+    algorithm: Algorithm,
+    r#type: PublicKeyCredentialType,
+}
+
+/// Public key creation options for Passkeys/WebAuthn API
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+struct PublicKeyCreationOptions {
+    challenge: String,
+    #[serde(rename = "rp")]
+    relying_party: RelyingParty,
+    user: User,
+    #[serde(rename = "pubKeyCredParams")]
+    public_key_credential_parameters: Vec<PublicKeyCredentialParameters>,
+}
+
+async fn get_challenge() -> impl IntoResponse {
+    let random = SystemRandom::new();
+    let mut challenge = [0u8; 32];
+    random
+        .fill(&mut challenge)
+        .expect("Expected to generate challenge");
+    let challenge = BASE64_STANDARD.encode(&challenge);
+    let relying_party = RelyingParty {
+        id: "localhost".to_string(),
+        name: "localhost name".to_string(),
+    };
+
+    let user = User {
+        id: BASE64_STANDARD.encode([1]),
+        name: "user name".to_string(),
+        display_name: "user display name".to_string(),
+    };
+
+    let public_key_credential_parameters = vec![PublicKeyCredentialParameters {
+        algorithm: Algorithm::ES256,
+        r#type: PublicKeyCredentialType::PublicKey,
+    }];
+
+    let public_key_creation_options = PublicKeyCreationOptions {
+        challenge,
+        relying_party,
+        user,
+        public_key_credential_parameters,
+    };
+
+    Json(public_key_creation_options)
 }

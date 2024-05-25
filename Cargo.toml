@@ -8,9 +8,15 @@ askama = "0.12.1"
 askama_axum = "0.4.0"
 axum = "0.7.5"
 axum-extra = { version = "0.9.3", features = ["cookie"] }
+base64 = "0.22.1"
 dotenv = "0.15.0"
 libsql = "0.3.5"
+nanoid = "0.4.0"
+reqwest = { version = "0.12.4", features = ["json"] }
+ring = "0.17.8"
 serde = "1.0.201"
+serde_json = "1.0.117"
+serde_repr = "0.1.19"
 time = "0.3.36"
 tokio = { version = "1.37.0", features = ["full"] }
 tower-http = { version = "0.5.2", features = ["fs"] }

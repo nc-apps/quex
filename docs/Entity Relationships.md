@@ -17,14 +17,18 @@ erDiagram
     ATTRAKDIFF-SURVEY 1--0+ ATTRAKDIFF-ANSWER : has
     NET-PROMOTER-SCORE-SURVEY 1--0+ NET-PROMOTER-SCORE-ANSWER : has
 
+    RESEARCHER 1--0+ SESSION : has
+    RESEARCHER 1--0+ SIGN-IN-ATTEMPT : has
+
     RESEARCHER {
-        integer id PK
+        text id PK
         string name
+        string email_address
     }
 
     SYSTEM-USABILITY-SCORE-SURVEY {
         integer id PK
-        integer user_id FK
+        text user_id FK
     }
 
     SYSTEM-USABILITY-SCORE-ANSWER {
@@ -44,7 +48,7 @@ erDiagram
 
     ATTRAKDIFF-SURVEY {
         integer id PK
-        integer user_id FK
+        text user_id FK
     }
 
     ATTRAKDIFF-ANSWER {
@@ -82,7 +86,7 @@ erDiagram
 
     NET-PROMOTER-SCORE-SURVEY {
         integer id PK
-        integer user_id FK
+        text user_id FK
     }
 
     NET-PROMOTER-SCORE-ANSWER {
@@ -91,4 +95,18 @@ erDiagram
         integer answer_1
         text answer_2
     }
+
+    SESSION {
+        text id PK
+        text user_id FK
+        date expires_at
+    }
+
+    SIGN-IN-ATTEMPT {
+        text id PK
+        text user_id PK
+        date expires_at
+    }
+
+
 ```

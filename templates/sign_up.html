@@ -7,14 +7,15 @@ content %}
 <fieldset>
     <legend>Sign up</legend>
     <form action="/signup" method="post">
-        <label for="username">Username</label>
-        <input type="text" name="username" id="username" required /><br />
-        <!-- <label for="email">Email</label>
-                <input type="email" name="email" id="email" required><br>
-                <label for="password">Password</label>
-                <input type="password" name="password" id="password" required><br> -->
+        <label for="email">Email</label>
+        <input type="email" name="email" id="email" required /><br />
+        <label for="name">Name</label>
+        <input type="name" name="name" id="name" required /><br />
         <button type="submit">Sign up</button>
     </form>
 </fieldset>
 
+{% call super() %} {% endblock %} {% block scripts %}
+
+<!-- <script type="module" src="/createPasskey.js"></script> -->
 {% call super() %} {% endblock %}
