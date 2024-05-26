@@ -2,7 +2,7 @@ use axum::{
     async_trait,
     extract::{FromRef, FromRequestParts},
     http::request::Parts,
-    response::{IntoResponse, Response},
+    response::{IntoResponse, Redirect, Response},
 };
 use axum_extra::extract::{cookie::Cookie, CookieJar};
 use libsql::named_params;
@@ -32,7 +32,8 @@ where
         let cookie = jar.get("session");
 
         let Some(cookie) = cookie else {
-            return Err(StatusCode::UNAUTHORIZED.into_response());
+            //TODO display error message
+            return Err(Redirect::to("/signin").into_response());
         };
 
         let session_id = cookie.value();
@@ -60,7 +61,7 @@ where
         let Some(row) = rows.next().await.unwrap() else {
             // Remove invalid cookie
             let jar = jar.remove(Cookie::from("session"));
-            return Err((jar, StatusCode::UNAUTHORIZED).into_response());
+            return Err((jar, Redirect::to("/signin")).into_response());
         };
 
         let user = AuthenticatedUser {

@@ -1,5 +1,6 @@
 use std::{env, net::Ipv4Addr, time::Duration};
 
+use crate::auth::authenticated_user::AuthenticatedUser;
 use askama_axum::{IntoResponse, Template};
 use axum::{extract::State, http::Uri, response::Redirect, routing::get, Form, Router};
 use dotenv::dotenv;
@@ -452,7 +453,7 @@ async fn create_sus(
 #[template(path = "surveys.html")]
 struct SurveysTemplate {}
 
-async fn surveys_page() -> impl IntoResponse {
+async fn surveys_page(user: AuthenticatedUser) -> impl IntoResponse {
     let surveys_template = SurveysTemplate {};
     //TODO identify user with cookie
     //TODO query database for surveys by user
