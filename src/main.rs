@@ -1,27 +1,13 @@
-use std::{env, net::Ipv4Addr};
+use std::{env, net::Ipv4Addr, time::Duration};
 
 use askama_axum::{IntoResponse, Template};
-use axum::{
-    extract::{Path, State},
-    http::{uri::Port, Uri},
-    response::Redirect,
-    routing::get,
-    Form, Json, Router,
-};
-use axum_extra::extract::{
-    cookie::{Cookie, SameSite},
-    CookieJar,
-};
-use base64::prelude::*;
+use axum::{extract::State, http::Uri, response::Redirect, routing::get, Form, Router};
 use dotenv::dotenv;
-use email::Email;
 use libsql::{named_params, Builder, Connection};
-use nanoid::nanoid;
-use ring::rand::{SecureRandom, SystemRandom};
-use serde::{Deserialize, Serialize};
-use serde_repr::Serialize_repr;
+use serde::{self, Deserialize};
 use tower_http::services::ServeDir;
 
+mod auth;
 mod email;
 
 #[tokio::main]
@@ -44,6 +30,8 @@ async fn main() {
         .expect("Failed to create tables");
 
     println!("Tables created");
+    // Set up background workers
+    let _handle = tokio::spawn(collect_garbage(connection.clone()));
 
     // Configuration
     //TODO implmement fallback to localhost
@@ -61,7 +49,8 @@ async fn main() {
         configuration,
     };
 
-    let serve_directory = ServeDir::new("public");
+    let auth_routes = auth::create_router();
+
     // Build our application with a route
     let app = Router::new()
         .route("/", get(handler))
@@ -71,14 +60,10 @@ async fn main() {
             "/attrakdiff",
             get(attrakdiff_handler).post(create_attrakdiff),
         )
-        .route("/signup", get(sign_up_handler).post(create_account))
-        .route("/signup/completed", get(signup_completed))
-        .route("/signin", get(sign_in_handler).post(sign_in))
-        .route("/signin/:attempt_id", get(complete_signin))
         .route("/surveys", get(surveys_page))
-        .route("/challenge", get(get_challenge))
+        .merge(auth_routes)
         // If the route could not be matched it might be a file
-        .fallback_service(serve_directory)
+        .fallback_service(ServeDir::new("public"))
         .with_state(app_state);
 
     // Run the server
@@ -105,14 +90,6 @@ struct SusTemplate {}
 struct AtrrakDiffTemplate {
     questions: Vec<(String, String)>,
 }
-
-#[derive(Template)]
-#[template(path = "sign_up.html")]
-struct SignUpTemplate {}
-
-#[derive(Template)]
-#[template(path = "sign_in.html")]
-struct SignInTemplate {}
 
 async fn handler() -> impl IntoResponse {
     let index_template = IndexTemplate {};
@@ -170,18 +147,6 @@ async fn attrakdiff_handler() -> impl IntoResponse {
     };
 
     attrakdiff_template
-}
-
-async fn sign_up_handler() -> impl IntoResponse {
-    let sign_up_template = SignUpTemplate {};
-
-    sign_up_template
-}
-
-async fn sign_in_handler() -> impl IntoResponse {
-    let sign_in_template = SignInTemplate {};
-
-    sign_in_template
 }
 
 #[derive(Deserialize, Debug)]
@@ -385,12 +350,14 @@ async fn create_attrakdiff(
 }
 
 #[derive(Clone)]
-struct Configuration {
+pub(crate) struct Configuration {
+    /// The server URL under which the server can be reached publicly for clients.
+    /// A user clicking an email link will be brought to this URL.
     server_url: Uri,
 }
 
 #[derive(Clone)]
-struct AppState {
+pub(crate) struct AppState {
     connection: Connection,
     client: reqwest::Client,
     configuration: Configuration,
@@ -468,148 +435,6 @@ async fn create_sus(
     Redirect::to("/")
 }
 
-#[derive(Deserialize, Debug)]
-struct CreateAccountRequest {
-    email: String,
-    name: String,
-}
-
-async fn create_account(
-    State(AppState {
-        connection,
-        configuration,
-        client,
-    }): State<AppState>,
-    Form(request): Form<CreateAccountRequest>,
-) -> impl IntoResponse {
-    //TODO check if user aleady exists
-    let user_id = nanoid!();
-    connection
-        .execute(
-            "INSERT INTO researchers (id, name, email_address) VALUES (:id, :name, :email_address)",
-            named_params![
-                ":id": user_id.clone(),
-                ":name": request.name,
-                ":email_address": request.email.clone(),
-            ],
-        )
-        .await
-        .unwrap();
-
-    let attempt_id = nanoid!();
-    let expires_at = time::OffsetDateTime::now_utc() + time::Duration::minutes(15);
-    let expires_at = expires_at.unix_timestamp();
-    connection
-        .execute(
-            "INSERT INTO signin_attempts VALUES (:id, :researcher_id, :expires_at)",
-            named_params![
-                ":id": attempt_id.clone(),
-                ":researcher_id": user_id,
-                ":expires_at": expires_at,
-            ],
-        )
-        .await
-        .unwrap();
-
-    //TODO email adress validation
-    email::send_sign_in_email(
-        Email(request.email),
-        &client,
-        attempt_id,
-        configuration.server_url,
-    )
-    .await
-    .unwrap();
-
-    Redirect::to("/signup/completed")
-}
-
-async fn complete_signin(
-    State(AppState { connection, .. }): State<AppState>,
-    jar: CookieJar,
-    Path(attempt_id): Path<String>,
-) -> impl IntoResponse {
-    // Check if sign in attempt exists
-    let mut rows = connection
-        .query(
-            "SELECT researcher_id, expires_at_utc FROM signin_attempts WHERE id = :id",
-            named_params![":id": attempt_id],
-        )
-        .await
-        .unwrap();
-
-    let Some(row) = rows.next().await.unwrap() else {
-        //TODO display error link has expired (even if it did not exist in the first place)
-        // Don't give away if the link existed or not
-        return Redirect::to("/signin").into_response();
-    };
-
-    let expires_at: i64 = row.get(1).unwrap();
-    if expires_at < time::OffsetDateTime::now_utc().unix_timestamp() {
-        //TODO display error link has expired
-        return Redirect::to("/signin").into_response();
-    }
-
-    let researcher_id: String = row.get(0).unwrap();
-    // Create session
-    let session_id = nanoid!();
-    //TODO decide how long a session should live
-    let expires_at = time::OffsetDateTime::now_utc() + time::Duration::days(30);
-
-    connection
-        .execute(
-            "INSERT INTO sessions (id, researcher_id, expires_at_utc) VALUES (:id, :researcher_id, :expires_at_utc)",
-            named_params![
-                ":id": session_id.clone(),
-                ":researcher_id": researcher_id,
-                ":expires_at_utc": expires_at.unix_timestamp(),
-            ],
-        )
-        .await
-        .unwrap();
-
-    // Set session cookie
-    //TODO should the cookie be encrypted?
-    let cookie = Cookie::build(("session", session_id))
-        .path("/")
-        .secure(true)
-        .http_only(true)
-        .same_site(SameSite::Strict)
-        .expires(expires_at);
-
-    (jar.add(cookie), Redirect::to("/")).into_response()
-}
-
-#[derive(Template)]
-#[template(path = "signup_completed.html")]
-struct SignupCompletedTemplate {}
-
-async fn signup_completed() -> impl IntoResponse {
-    let sign_up_completed_template = SignupCompletedTemplate {};
-    sign_up_completed_template
-}
-
-#[derive(Deserialize, Debug)]
-struct SignInRequest {
-    username: String,
-}
-
-async fn sign_in(
-    jar: CookieJar,
-    Form(sign_in_request): Form<SignInRequest>,
-) -> (CookieJar, Redirect) {
-    //TODO authentication
-    let cookie = Cookie::build(("user", sign_in_request.username))
-        .path("/")
-        .secure(true)
-        .http_only(true)
-        // Prevents CRSF attack
-        .same_site(SameSite::Strict)
-        .expires(time::OffsetDateTime::now_utc() + time::Duration::days(1));
-
-    (jar.add(cookie), Redirect::to("/"))
-}
-
 #[derive(Template)]
 #[template(path = "surveys.html")]
 struct SurveysTemplate {}
@@ -623,83 +448,32 @@ async fn surveys_page() -> impl IntoResponse {
     surveys_template
 }
 
-#[derive(Serialize, Debug)]
-#[serde(rename_all = "camelCase")]
-struct RelyingParty {
-    id: String,
-    name: String,
-}
+/// Runs forever and cleans up expired app data about every 5 minutes
+async fn collect_garbage(connection: Connection) {
+    // It is not important that it cleans exactly every 5 minutes but it is important that it happens regularly
+    // Duration from minutes is experimental currently
+    let mut interval = tokio::time::interval(Duration::from_secs(5 * 60));
+    loop {
+        interval.tick().await;
+        let now = time::OffsetDateTime::now_utc().unix_timestamp();
+        // Clean up expired sessions
+        connection
+            .execute(
+                "DELETE FROM sessions WHERE expires_at_utc < :now",
+                named_params![":now": now],
+            )
+            .await
+            .expect("Failed to delete expired sessions");
 
-#[derive(Serialize, Debug)]
-#[serde(rename_all = "camelCase")]
-struct User {
-    id: String,
-    name: String,
-    display_name: String,
-}
+        // Clean up expired sign in attemps
+        connection
+            .execute(
+                "DELETE FROM signin_attempts WHERE expires_at_utc < :now",
+                named_params![":now": now],
+            )
+            .await
+            .expect("Failed to delete expired signin attempts");
 
-#[derive(Debug, Serialize_repr)]
-#[repr(i16)]
-enum Algorithm {
-    Ed25519 = -8,
-    ES256 = -7,
-    RS256 = -257,
-}
-
-#[derive(Serialize, Debug)]
-enum PublicKeyCredentialType {
-    #[serde(rename = "public-key")]
-    PublicKey,
-}
-
-#[derive(Serialize, Debug)]
-struct PublicKeyCredentialParameters {
-    #[serde(rename = "alg")]
-    algorithm: Algorithm,
-    r#type: PublicKeyCredentialType,
-}
-
-/// Public key creation options for Passkeys/WebAuthn API
-#[derive(Serialize, Debug)]
-#[serde(rename_all = "camelCase")]
-struct PublicKeyCreationOptions {
-    challenge: String,
-    #[serde(rename = "rp")]
-    relying_party: RelyingParty,
-    user: User,
-    #[serde(rename = "pubKeyCredParams")]
-    public_key_credential_parameters: Vec<PublicKeyCredentialParameters>,
-}
-
-async fn get_challenge() -> impl IntoResponse {
-    let random = SystemRandom::new();
-    let mut challenge = [0u8; 32];
-    random
-        .fill(&mut challenge)
-        .expect("Expected to generate challenge");
-    let challenge = BASE64_STANDARD.encode(&challenge);
-    let relying_party = RelyingParty {
-        id: "localhost".to_string(),
-        name: "localhost name".to_string(),
-    };
-
-    let user = User {
-        id: BASE64_STANDARD.encode([1]),
-        name: "user name".to_string(),
-        display_name: "user display name".to_string(),
-    };
-
-    let public_key_credential_parameters = vec![PublicKeyCredentialParameters {
-        algorithm: Algorithm::ES256,
-        r#type: PublicKeyCredentialType::PublicKey,
-    }];
-
-    let public_key_creation_options = PublicKeyCreationOptions {
-        challenge,
-        relying_party,
-        user,
-        public_key_credential_parameters,
-    };
-
-    Json(public_key_creation_options)
+        dbg!("ran clean up");
+    }
 }
