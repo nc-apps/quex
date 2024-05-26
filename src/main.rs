@@ -3,23 +3,36 @@ use std::{env, net::Ipv4Addr, time::Duration};
 use askama_axum::{IntoResponse, Template};
 use axum::{extract::State, http::Uri, response::Redirect, routing::get, Form, Router};
 use dotenv::dotenv;
-use libsql::{named_params, Builder, Connection};
+use libsql::{named_params, Builder, Connection, Database};
 use serde::{self, Deserialize};
 use tower_http::services::ServeDir;
 
 mod auth;
 mod email;
 
-#[tokio::main]
-async fn main() {
-    dotenv().ok();
+// Use local database for debugging
+#[cfg(debug_assertions)]
+async fn create_database() -> Database {
+    Builder::new_local("database.db").build().await.unwrap()
+}
+
+#[cfg(not(debug_assertions))]
+async fn create_database() -> Database {
     let url = env::var("TURSO_DATABASE_URL")
         .expect("TURSO_DATABASE_URL environment variable must be set. Did you forget to set up the .env file?");
     let token = env::var("TURSO_AUTH_TOKEN").unwrap_or_default();
-    let database = Builder::new_remote(url, token)
+
+    Builder::new_remote(url, token)
         .build()
         .await
-        .expect("Failed to connect to database");
+        .expect("Failed to connect to database")
+}
+
+#[tokio::main]
+async fn main() {
+    dotenv().ok();
+
+    let database = create_database().await;
 
     let connection = database.connect().unwrap();
 
