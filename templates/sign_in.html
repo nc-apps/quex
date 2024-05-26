@@ -3,14 +3,14 @@ content %}
 
 <a href="/">Home</a>
 <fieldset>
-    <legend>Sign In</legend>
+    <legend>Sign in</legend>
     <form action="/signin" method="post">
-        <label for="username">Username</label>
+        <label for="email">Email Adress</label>
         <input
             type="text"
-            name="username"
-            id="username"
-            autocomplete="username webauthn"
+            name="email"
+            id="email"
+            autocomplete="email webauthn"
             required
         /><br />
         <button type="submit">Next</button>
@@ -18,5 +18,5 @@ content %}
 </fieldset>
 {% call super() %} {% endblock %} {% block scripts %}
 
-<script type="module" src="/passkey.js"></script>
+<!-- <script type="module" src="/passkey.js"></script> -->
 {% call super() %} {% endblock %}
