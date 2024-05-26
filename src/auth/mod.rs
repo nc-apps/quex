@@ -18,7 +18,6 @@ use nanoid::nanoid;
 use serde::Deserialize;
 
 pub(crate) mod authenticated_user;
-mod passkey;
 
 //TODO decide how long a session should live
 const SESSION_LIFETIME: time::Duration = time::Duration::days(30);
@@ -261,5 +260,4 @@ pub(crate) fn create_router() -> Router<AppState> {
         .route("/signin/completed", get(signin_completed))
         .route("/signin/:attempt_id", get(complete_signin))
         .route("/signin/expired", get(sign_in_expired))
-        .route("/challenge", get(passkey::get_challenge))
 }
