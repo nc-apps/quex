@@ -17,6 +17,7 @@ use libsql::named_params;
 use nanoid::nanoid;
 use serde::Deserialize;
 
+mod authenticated_user;
 mod passkey;
 
 const SESSION_LIFETIME: time::Duration = time::Duration::days(30);
