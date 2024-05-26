@@ -198,7 +198,7 @@ async fn sign_in(
     let attempt_id = nanoid!();
     let expires_at = time::OffsetDateTime::now_utc() + SIGNIN_ATTEMPT_LIFETIME;
     let expires_at = expires_at.unix_timestamp();
-    dbg!(&attempt_id);
+
     connection
         .execute(
             "INSERT INTO signin_attempts VALUES (:id, :researcher_id, :expires_at)",

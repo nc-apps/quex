@@ -487,7 +487,5 @@ async fn collect_garbage(connection: Connection) {
             )
             .await
             .expect("Failed to delete expired signin attempts");
-
-        dbg!("ran clean up");
     }
 }
