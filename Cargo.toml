@@ -4,10 +4,28 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+# For HTML templating
 askama = "0.12.1"
 askama_axum = "0.4.0"
+# Web server framework
 axum = "0.7.5"
+# Useful utilities like cookies
+axum-extra = { version = "0.9.3", features = ["cookie"] }
+# Binary encoding/decoding
+base64 = "0.22.1"
+# For environment variables
 dotenv = "0.15.0"
+# Database and Turso
 libsql = "0.3.5"
+# Better ids than UUIDs
+nanoid = "0.4.0"
+# HTTP requests for API calls like sending emails through a service
+reqwest = { version = "0.12.4", features = ["json"] }
+# Ser[ialization]/de[serialization]
 serde = "1.0.201"
+# For time things like expiration dates
+time = "0.3.36"
+# Async runtime
 tokio = { version = "1.37.0", features = ["full"] }
+# Tokio utilities like file system access
+tower-http = { version = "0.5.2", features = ["fs"] }

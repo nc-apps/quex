@@ -1,0 +1,13 @@
+{% extends "layout.html" %} {% block title %}Expired signin{% endblock %} {%
+block content %}
+
+<a href="/">Home</a>
+<hgroup>
+    <h1>Signin expired</h1>
+    <p>
+        Sorry, that link can no longer be used. It has expired or is invalid.
+        Please
+        <a href="/signin">sign in</a> again.
+    </p>
+</hgroup>
+{% call super() %} {% endblock %}

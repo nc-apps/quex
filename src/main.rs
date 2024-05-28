@@ -1,21 +1,39 @@
-use std::env;
+use std::{env, net::Ipv4Addr, time::Duration};
 
+use crate::auth::authenticated_user::AuthenticatedUser;
 use askama_axum::{IntoResponse, Template};
-use axum::{extract::State, response::Redirect, routing::get, Form, Router};
+use axum::{extract::State, http::Uri, response::Redirect, routing::get, Form, Router};
 use dotenv::dotenv;
-use libsql::{Builder, Connection};
-use serde::Deserialize;
+use libsql::{named_params, Builder, Connection, Database};
+use serde::{self, Deserialize};
+use tower_http::services::ServeDir;
+
+mod auth;
+mod email;
+
+// Use local database for debugging
+#[cfg(debug_assertions)]
+async fn create_database() -> Database {
+    Builder::new_local("database.db").build().await.unwrap()
+}
+
+#[cfg(not(debug_assertions))]
+async fn create_database() -> Database {
+    let url = env::var("TURSO_DATABASE_URL")
+        .expect("TURSO_DATABASE_URL environment variable must be set. Did you forget to set up the .env file?");
+    let token = env::var("TURSO_AUTH_TOKEN").unwrap_or_default();
+
+    Builder::new_remote(url, token)
+        .build()
+        .await
+        .expect("Failed to connect to database")
+}
 
 #[tokio::main]
 async fn main() {
     dotenv().ok();
-    let url = env::var("TURSO_DATABASE_URL")
-        .expect("TURSO_DATABASE_URL environment variable must be set. Did you forget to set up the .env file?");
-    let token = env::var("TURSO_AUTH_TOKEN").unwrap_or_default();
-    let database = Builder::new_remote(url, token)
-        .build()
-        .await
-        .expect("Failed to connect to database");
+
+    let database = create_database().await;
 
     let connection = database.connect().unwrap();
 
@@ -26,10 +44,28 @@ async fn main() {
         .expect("Failed to create tables");
 
     println!("Tables created");
+    // Set up background workers
+    let _handle = tokio::spawn(collect_garbage(connection.clone()));
 
-    let app_state = AppState { connection };
+    // Configuration
+    //TODO implmement fallback to localhost
+    //TODO implement warning that users can not follow links (e.g. in emails) if host is localhost or 127.0.0.1
+    let url = env::var("QUEX_URL").expect("QUEX_URL environment variable must be set");
 
-    // build our application with a route
+    let url = Uri::try_from(url).expect("Invalid URL in QUEX_URL environment variable");
+    let port = url.port().map(|port| port.as_u16()).unwrap_or(80);
+    let configuration = Configuration { server_url: url };
+
+    let client = reqwest::Client::new();
+    let app_state = AppState {
+        connection,
+        client,
+        configuration,
+    };
+
+    let auth_routes = auth::create_router();
+
+    // Build our application with a route
     let app = Router::new()
         .route("/", get(handler))
         .route("/nps", get(nps_handler).post(create_nps))
@@ -38,12 +74,14 @@ async fn main() {
             "/attrakdiff",
             get(attrakdiff_handler).post(create_attrakdiff),
         )
-        .route("/signup", get(sign_up_handler).post(create_sign_up))
-        .route("/signin", get(sign_in_handler).post(create_sign_in))
+        .route("/surveys", get(surveys_page))
+        .merge(auth_routes)
+        // If the route could not be matched it might be a file
+        .fallback_service(ServeDir::new("public"))
         .with_state(app_state);
 
-    // run it
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
+    // Run the server
+    let listener = tokio::net::TcpListener::bind((Ipv4Addr::new(127, 0, 0, 1), port))
         .await
         .unwrap();
     println!("listening on http://{}", listener.local_addr().unwrap());
@@ -67,14 +105,6 @@ struct AtrrakDiffTemplate {
     questions: Vec<(String, String)>,
 }
 
-#[derive(Template)]
-#[template(path = "sign_up.html")]
-struct SignUpTemplate {}
-
-#[derive(Template)]
-#[template(path = "sign_in.html")]
-struct SignInTemplate {}
-
 async fn handler() -> impl IntoResponse {
     let index_template = IndexTemplate {};
 
@@ -86,6 +116,7 @@ async fn nps_handler() -> impl IntoResponse {
 
     nps_template
 }
+
 async fn sus_handler() -> impl IntoResponse {
     let sus_template = SusTemplate {};
 
@@ -130,18 +161,6 @@ async fn attrakdiff_handler() -> impl IntoResponse {
     };
 
     attrakdiff_template
-}
-
-async fn sign_up_handler() -> impl IntoResponse {
-    let sign_up_template = SignUpTemplate {};
-
-    sign_up_template
-}
-
-async fn signin_handler() -> impl IntoResponse {
-    let sign_in_template = SignInTemplate {};
-
-    sign_in_template
 }
 
 #[derive(Deserialize, Debug)]
@@ -247,14 +266,14 @@ async fn create_attrakdiff(
         .execute(
             // insert ansewrs 1 to 28 into database
             "INSERT INTO attrakdiff_responses (
-                answer_1, 
-                answer_2, 
-                answer_3, 
-                answer_4, 
-                answer_5, 
-                answer_6, 
-                answer_7, 
-                answer_8, 
+                answer_1,
+                answer_2,
+                answer_3,
+                answer_4,
+                answer_5,
+                answer_6,
+                answer_7,
+                answer_8,
                 answer_9,
                 answer_10,
                 answer_11,
@@ -276,14 +295,14 @@ async fn create_attrakdiff(
                 answer_27,
                 answer_28
             ) VALUES (
-                ?1, 
-                ?2, 
-                ?3, 
-                ?4, 
-                ?5, 
-                ?6, 
-                ?7, 
-                ?8, 
+                ?1,
+                ?2,
+                ?3,
+                ?4,
+                ?5,
+                ?6,
+                ?7,
+                ?8,
                 ?9,
                 ?10,
                 ?11,
@@ -343,9 +362,19 @@ async fn create_attrakdiff(
 
     Redirect::to("/")
 }
+
 #[derive(Clone)]
-struct AppState {
+pub(crate) struct Configuration {
+    /// The server URL under which the server can be reached publicly for clients.
+    /// A user clicking an email link will be brought to this URL.
+    server_url: Uri,
+}
+
+#[derive(Clone)]
+pub(crate) struct AppState {
     connection: Connection,
+    client: reqwest::Client,
+    configuration: Configuration,
 }
 
 async fn create_nps(
@@ -378,26 +407,26 @@ async fn create_sus(
         .connection
         .execute(
             "INSERT INTO system_usability_score_responses (
-                answer_1, 
-                answer_2, 
-                answer_3, 
-                answer_4, 
+                answer_1,
+                answer_2,
+                answer_3,
+                answer_4,
                 answer_5,
-                answer_6, 
-                answer_7, 
-                answer_8, 
-                answer_9, 
+                answer_6,
+                answer_7,
+                answer_8,
+                answer_9,
                 answer_10
             ) VALUES (
-                ?1, 
-                ?2, 
-                ?3, 
-                ?4, 
-                ?5, 
-                ?6, 
-                ?7, 
-                ?8, 
-                ?9, 
+                ?1,
+                ?2,
+                ?3,
+                ?4,
+                ?5,
+                ?6,
+                ?7,
+                ?8,
+                ?9,
                 ?10)",
             libsql::params![
                 sus_answers.q1,
@@ -420,10 +449,43 @@ async fn create_sus(
     Redirect::to("/")
 }
 
-async fn create_sign_up() -> impl IntoResponse {
-    Redirect::to("/")
+#[derive(Template)]
+#[template(path = "surveys.html")]
+struct SurveysTemplate {}
+
+async fn surveys_page(user: AuthenticatedUser) -> impl IntoResponse {
+    let surveys_template = SurveysTemplate {};
+    //TODO identify user with cookie
+    //TODO query database for surveys by user
+    //TODO add surveys to template
+    //TODO render surveys in template
+    surveys_template
 }
 
-async fn create_sign_in() -> impl IntoResponse {
-    Redirect::to("/")
+/// Runs forever and cleans up expired app data about every 5 minutes
+async fn collect_garbage(connection: Connection) {
+    // It is not important that it cleans exactly every 5 minutes but it is important that it happens regularly
+    // Duration from minutes is experimental currently
+    let mut interval = tokio::time::interval(Duration::from_secs(5 * 60));
+    loop {
+        interval.tick().await;
+        let now = time::OffsetDateTime::now_utc().unix_timestamp();
+        // Clean up expired sessions
+        connection
+            .execute(
+                "DELETE FROM sessions WHERE expires_at_utc < :now",
+                named_params![":now": now],
+            )
+            .await
+            .expect("Failed to delete expired sessions");
+
+        // Clean up expired sign in attemps
+        connection
+            .execute(
+                "DELETE FROM signin_attempts WHERE expires_at_utc < :now",
+                named_params![":now": now],
+            )
+            .await
+            .expect("Failed to delete expired signin attempts");
+    }
 }

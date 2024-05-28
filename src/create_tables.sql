@@ -1,25 +1,26 @@
 BEGIN;
 
 CREATE TABLE IF NOT EXISTS researchers (
-    id INTEGER PRIMARY KEY,
-    name TEXT NOT NULL
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    email_address TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS system_usability_score_surveys (
     id INTEGER PRIMARY KEY,
-    researcher_id INTEGER NOT NULL,
+    researcher_id TEXT NOT NULL,
     FOREIGN KEY(researcher_id) REFERENCES researchers(id)
 );
 
 CREATE TABLE IF NOT EXISTS net_promoter_score_surveys (
     id INTEGER PRIMARY KEY,
-    researcher_id INTEGER NOT NULL,
+    researcher_id TEXT NOT NULL,
     FOREIGN KEY(researcher_id) REFERENCES researchers(id)
 );
 
 CREATE TABLE IF NOT EXISTS attrakdiff_surveys (
     id INTEGER PRIMARY KEY,
-    researcher_id INTEGER NOT NULL,
+    researcher_id TEXT NOT NULL,
     FOREIGN KEY (researcher_id) REFERENCES researchers(id)
 );
 
@@ -79,6 +80,20 @@ CREATE TABLE IF NOT EXISTS attrakdiff_responses (
     answer_27 INTEGER NOT NULL,
     answer_28 INTEGER NOT NULL,
     FOREIGN KEY(survey_id) REFERENCES attrakdiff_surveys(id)
+);
+
+CREATE TABLE IF NOT EXISTS sessions (
+    id TEXT PRIMARY KEY,
+    researcher_id TEXT NOT NULL,
+    expires_at_utc INTEGER NOT NULL,
+    FOREIGN KEY(researcher_id) REFERENCES researchers(id)
+);
+
+CREATE TABLE IF NOT EXISTS signin_attempts (
+    id TEXT PRIMARY KEY,
+    researcher_id TEXT NOT NULL,
+    expires_at_utc INTEGER NOT NULL,
+    FOREIGN KEY(researcher_id) REFERENCES researchers(id)
 );
 
 END;
