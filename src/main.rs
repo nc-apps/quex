@@ -451,10 +451,33 @@ async fn create_sus(
 
 #[derive(Template)]
 #[template(path = "surveys.html")]
-struct SurveysTemplate {}
+struct SurveysTemplate {
+    surveys: Vec<u32>,
+}
 
-async fn surveys_page(user: AuthenticatedUser) -> impl IntoResponse {
-    let surveys_template = SurveysTemplate {};
+async fn surveys_page(
+    user: AuthenticatedUser,
+    State(app_state): State<AppState>,
+) -> impl IntoResponse {
+    let mut rows = app_state
+        .connection
+        .query(
+            "SELECT id FROM system_usability_score_surveys WHERE researcher_id = :researcher_id",
+            named_params![":researcher_id": user.id],
+        )
+        .await
+        .expect("Failed to query surveys");
+
+    dbg!(rows.column_count());
+
+    let mut surveys = Vec::new();
+
+    while let Ok(Some(row)) = rows.next().await {
+        let sus_survey: u32 = row.get(0).expect("Failed to get survey id");
+        surveys.push(sus_survey);
+    }
+
+    let surveys_template = SurveysTemplate { surveys: surveys };
     //TODO identify user with cookie
     //TODO query database for surveys by user
     //TODO add surveys to template

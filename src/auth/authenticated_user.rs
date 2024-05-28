@@ -11,7 +11,7 @@ use reqwest::StatusCode;
 use crate::AppState;
 
 pub(crate) struct AuthenticatedUser {
-    id: String,
+    pub id: String,
     name: String,
     email_address: String,
 }
