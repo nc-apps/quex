@@ -252,6 +252,11 @@ async fn sign_in_expired() -> impl IntoResponse {
     sign_in_expired_template
 }
 
+async fn sign_out(jar: CookieJar) -> (CookieJar, Redirect) {
+    // This should be a no-op if the cookie doesn't exist
+    (jar.remove("session"), Redirect::to("/"))
+}
+
 pub(crate) fn create_router() -> Router<AppState> {
     Router::new()
         .route("/signup", get(sign_up_handler).post(create_account))
@@ -260,4 +265,5 @@ pub(crate) fn create_router() -> Router<AppState> {
         .route("/signin/completed", get(signin_completed))
         .route("/signin/:attempt_id", get(complete_signin))
         .route("/signin/expired", get(sign_in_expired))
+        .route("/signout", get(sign_out))
 }
