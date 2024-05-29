@@ -89,7 +89,9 @@ async fn main() {
 }
 #[derive(Template)]
 #[template(path = "index.html")]
-struct IndexTemplate {}
+struct IndexTemplate {
+    is_authenticated: bool,
+}
 
 #[derive(Template)]
 #[template(path = "nps.html")]
@@ -105,8 +107,10 @@ struct AtrrakDiffTemplate {
     questions: Vec<(String, String)>,
 }
 
-async fn handler() -> impl IntoResponse {
-    let index_template = IndexTemplate {};
+async fn handler(user: Option<AuthenticatedUser>) -> impl IntoResponse {
+    let index_template = IndexTemplate {
+        is_authenticated: user.is_some(),
+    };
 
     index_template
 }
