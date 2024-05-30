@@ -5,8 +5,13 @@ content %}
 <a href="/nps">Net Promoter Score</a><br />
 <a href="/sus">System Usability Score</a><br />
 <a href="/attrakdiff">AttrakDiff</a><br />
+
+{% if is_authenticated %}
+<a href="/surveys">My Surveys</a><br />
+<a href="/signout">Sign out</a>
+{% else %}
 <a href="/signup">Sign up</a><br />
 <a href="/signin">Sign in</a> <br />
-<a href="/surveys">My Surveys</a> <br />
-<a href="/signout">Sign out</a>
-{% call super() %} {% endblock %}
+{% endif %} 
+{% call super() %}
+{% endblock %}
