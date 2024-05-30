@@ -17,6 +17,8 @@ use libsql::named_params;
 use nanoid::nanoid;
 use serde::Deserialize;
 
+use self::authenticated_user::AuthenticatedUser;
+
 pub(crate) mod authenticated_user;
 
 //TODO decide how long a session should live
@@ -231,16 +233,28 @@ struct SignUpTemplate {}
 #[derive(Template)]
 #[template(path = "sign_in.html")]
 struct SignInTemplate {}
-async fn sign_up_handler() -> impl IntoResponse {
+async fn sign_up_handler(user: Option<AuthenticatedUser>) -> impl IntoResponse {
+    // Check if is already authenticated and redirect to surveys
+    // Ideally they should not land on the signup page if they are already authenticated
+    if user.is_some() {
+        return Redirect::to("/surveys").into_response();
+    }
+
     let sign_up_template = SignUpTemplate {};
 
-    sign_up_template
+    sign_up_template.into_response()
 }
 
-async fn sign_in_handler() -> impl IntoResponse {
+async fn sign_in_handler(user: Option<AuthenticatedUser>) -> impl IntoResponse {
+    // Check if is already authenticated and redirect to surveys
+    // Ideally they should not land on the signin page if they are already authenticated
+    if user.is_some() {
+        return Redirect::to("/surveys").into_response();
+    }
+
     let sign_in_template = SignInTemplate {};
 
-    sign_in_template
+    sign_in_template.into_response()
 }
 
 #[derive(Template)]
@@ -252,6 +266,11 @@ async fn sign_in_expired() -> impl IntoResponse {
     sign_in_expired_template
 }
 
+async fn sign_out(jar: CookieJar) -> (CookieJar, Redirect) {
+    // This should be a no-op if the cookie doesn't exist
+    (jar.remove("session"), Redirect::to("/"))
+}
+
 pub(crate) fn create_router() -> Router<AppState> {
     Router::new()
         .route("/signup", get(sign_up_handler).post(create_account))
@@ -260,4 +279,5 @@ pub(crate) fn create_router() -> Router<AppState> {
         .route("/signin/completed", get(signin_completed))
         .route("/signin/:attempt_id", get(complete_signin))
         .route("/signin/expired", get(sign_in_expired))
+        .route("/signout", get(sign_out))
 }

@@ -8,7 +8,10 @@ content %}
 
 {% if is_authenticated %}
 <a href="/surveys">My Surveys</a><br />
+<a href="/signout">Sign out</a>
 {% else %}
 <a href="/signup">Sign up</a><br />
 <a href="/signin">Sign in</a> <br />
-{% endif %} {% call super() %} {% endblock %}
+{% endif %} 
+{% call super() %}
+{% endblock %}
