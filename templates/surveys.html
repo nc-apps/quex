@@ -3,5 +3,8 @@ content %}
 
 <a href="/">Home</a>
 <h1>My Surveys</h1>
+{% for survey in surveys %}
+<a href="/sus/{{ survey }}">SUS Survey {{ survey }}</a>
+{% endfor %}
 
 {% call super() %} {% endblock %}
