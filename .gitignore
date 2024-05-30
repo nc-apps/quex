@@ -24,3 +24,5 @@ Cargo.lock
 
 # RustRover and other Jetbrains products
 .idea/
+
+node_modules/
