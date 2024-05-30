@@ -1,6 +1,6 @@
 {% extends "layout.html" %} {% block title %} Home {% endblock %} {% block
 content %}
-<h1>Quex</h1>
+<h1 class="text-3xl font-serif text-center ">Quex</h1>
 <p>This is the startig page of quex, welcome!</p>
 <a href="/nps">Net Promoter Score</a><br />
 <a href="/sus">System Usability Score</a><br />
@@ -12,6 +12,6 @@ content %}
 {% else %}
 <a href="/signup">Sign up</a><br />
 <a href="/signin">Sign in</a> <br />
-{% endif %} 
+{% endif %}
 {% call super() %}
 {% endblock %}

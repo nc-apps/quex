@@ -1,0 +1,15 @@
+{
+  "name": "quex",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "tailwindcss": "tailwindcss -i ./tailwind.css -o ./public/styles.css"
+  },
+  "keywords": [],
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "tailwindcss": "^3.4.3"
+  }
+}
