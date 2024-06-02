@@ -12,24 +12,7 @@ use tracing_subscriber::util::SubscriberInitExt;
 
 mod auth;
 mod email;
-
-// Use local database for debugging
-#[cfg(debug_assertions)]
-async fn create_database() -> Database {
-    Builder::new_local("database.db").build().await.unwrap()
-}
-
-#[cfg(not(debug_assertions))]
-async fn create_database() -> Database {
-    let url = env::var("TURSO_DATABASE_URL")
-        .expect("TURSO_DATABASE_URL environment variable must be set. Did you forget to set up the .env file?");
-    let token = env::var("TURSO_AUTH_TOKEN").unwrap_or_default();
-
-    Builder::new_remote(url, token)
-        .build()
-        .await
-        .expect("Failed to connect to database")
-}
+mod database;
 
 #[tokio::main]
 async fn main() {
@@ -43,17 +26,9 @@ async fn main() {
 
     dotenv().ok();
 
-    let database = create_database().await;
+    // Set up database
+    let connection = database::initialize_database().await;
 
-    let connection = database.connect().unwrap();
-
-    let query = include_str!("./create_tables.sql");
-    connection
-        .execute_batch(&query)
-        .await
-        .expect("Failed to create tables");
-
-    tracing::debug!("Tables created");
     // Set up background workers
     let _handle = tokio::spawn(collect_garbage(connection.clone()));
 
