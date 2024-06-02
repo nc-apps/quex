@@ -7,6 +7,8 @@ use dotenv::dotenv;
 use libsql::{named_params, Builder, Connection, Database};
 use serde::{self, Deserialize};
 use tower_http::services::ServeDir;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
 
 mod auth;
 mod email;
@@ -31,6 +33,14 @@ async fn create_database() -> Database {
 
 #[tokio::main]
 async fn main() {
+    tracing_subscriber::registry()
+        .with(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| "quex=debug,tower_http=debug".into()),
+        )
+        .with(tracing_subscriber::fmt::layer())
+        .init();
+
     dotenv().ok();
 
     let database = create_database().await;
@@ -48,7 +58,7 @@ async fn main() {
     let _handle = tokio::spawn(collect_garbage(connection.clone()));
 
     // Configuration
-    //TODO implmement fallback to localhost
+    //TODO implement fallback to localhost
     //TODO implement warning that users can not follow links (e.g. in emails) if host is localhost or 127.0.0.1
     let url = env::var("QUEX_URL").expect("QUEX_URL environment variable must be set");
 
