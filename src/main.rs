@@ -89,7 +89,7 @@ struct SusTemplate {}
 
 #[derive(Template)]
 #[template(path = "attrakdiff.html")]
-struct AtrrakDiffTemplate {
+struct AttrakDiffTemplate {
     questions: Vec<(String, String)>,
 }
 
@@ -114,7 +114,7 @@ async fn sus_handler() -> impl IntoResponse {
 }
 
 async fn attrakdiff_handler() -> impl IntoResponse {
-    let attrakdiff_template = AtrrakDiffTemplate {
+    let attrakdiff_template = AttrakDiffTemplate {
         questions: vec![
             ("Human".to_string(), "Technical".to_string()),
             ("Isolating".to_string(), "Connective".to_string()),
@@ -125,7 +125,7 @@ async fn attrakdiff_handler() -> impl IntoResponse {
             ("Ugly".to_string(), "Attractive".to_string()),
             ("Practical".to_string(), "Impractical".to_string()),
             ("Likable".to_string(), "Disagreeable".to_string()),
-            ("Cumbersone".to_string(), "Straightforward".to_string()),
+            ("Cumbersome".to_string(), "Straightforward".to_string()),
             ("Stylish".to_string(), "Tacky".to_string()),
             ("Predictable".to_string(), "Unpredictable".to_string()),
             ("Cheap".to_string(), "Premium".to_string()),
@@ -249,12 +249,12 @@ async fn create_attrakdiff(
     State(app_state): State<AppState>,
     Form(attrakdiff_answers): Form<AttrakDiffAnswers>,
 ) -> impl IntoResponse {
-    tracing::debug!("Answers for AtrrakDiff: {:?}", attrakdiff_answers);
+    tracing::debug!("Answers for AttrakDiff: {:?}", attrakdiff_answers);
 
     app_state
         .connection
         .execute(
-            // insert ansewrs 1 to 28 into database
+            // insert answers 1 to 28 into database
             "INSERT INTO attrakdiff_responses (
                 answer_1,
                 answer_2,
@@ -465,17 +465,13 @@ async fn surveys_page(
         surveys.push(sus_survey);
     }
 
-    let surveys_template = SurveysTemplate { surveys: surveys };
-    //TODO identify user with cookie
-    //TODO query database for surveys by user
-    //TODO add surveys to template
-    //TODO render surveys in template
+    let surveys_template = SurveysTemplate { surveys };
     surveys_template
 }
 
 /// Runs forever and cleans up expired app data about every 5 minutes
 async fn collect_garbage(connection: Connection) {
-    // It is not important that it cleans exactly every 5 minutes but it is important that it happens regularly
+    // It is not important that it cleans exactly every 5 minutes, but it is important that it happens regularly
     // Duration from minutes is experimental currently
     let mut interval = tokio::time::interval(Duration::from_secs(5 * 60));
     loop {
@@ -490,7 +486,7 @@ async fn collect_garbage(connection: Connection) {
             .await
             .expect("Failed to delete expired sessions");
 
-        // Clean up expired sign in attemps
+        // Clean up expired sign in attempts
         connection
             .execute(
                 "DELETE FROM signin_attempts WHERE expires_at_utc < :now",
