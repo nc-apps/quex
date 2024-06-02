@@ -1,4 +1,3 @@
-mod questionnaires;
 pub(crate) mod index;
 pub(crate) mod net_promoter_score;
 pub(crate) mod attrakdiff;
