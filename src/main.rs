@@ -53,7 +53,7 @@ async fn main() {
         .await
         .expect("Failed to create tables");
 
-    println!("Tables created");
+    tracing::debug!("Tables created");
     // Set up background workers
     let _handle = tokio::spawn(collect_garbage(connection.clone()));
 
@@ -94,7 +94,8 @@ async fn main() {
     let listener = tokio::net::TcpListener::bind((Ipv4Addr::new(127, 0, 0, 1), port))
         .await
         .unwrap();
-    println!("listening on http://{}", listener.local_addr().unwrap());
+
+    tracing::debug!("listening on http://{}", listener.local_addr().unwrap());
     axum::serve(listener, app).await.unwrap();
 }
 #[derive(Template)]
@@ -273,7 +274,7 @@ async fn create_attrakdiff(
     State(app_state): State<AppState>,
     Form(attrakdiff_answers): Form<AttrakDiffAnswers>,
 ) -> impl IntoResponse {
-    println!("Answers for AtrrakDiff: {:?}", attrakdiff_answers);
+    tracing::debug!("Answers for AtrrakDiff: {:?}", attrakdiff_answers);
 
     app_state
         .connection
@@ -372,7 +373,7 @@ async fn create_attrakdiff(
         .await
         .expect("Failed to insert into database");
 
-    println!("Inserted into database");
+    tracing::debug!("Inserted into database");
 
     Redirect::to("/")
 }
@@ -395,7 +396,7 @@ async fn create_nps(
     State(app_state): State<AppState>,
     Form(nps_answers): Form<NpsAnswers>,
 ) -> impl IntoResponse {
-    println!("Answers for NPS: {:?}", nps_answers);
+    tracing::debug!("Answers for NPS: {:?}", nps_answers);
 
     app_state
         .connection
@@ -406,7 +407,7 @@ async fn create_nps(
         .await
         .expect("Failed to insert into database");
 
-    println!("Inserted into database");
+    tracing::debug!("Inserted into database");
 
     Redirect::to("/")
 }
@@ -415,7 +416,7 @@ async fn create_sus(
     State(app_state): State<AppState>,
     Form(sus_answers): Form<SusAnswers>,
 ) -> impl IntoResponse {
-    println!("Answers for SUS: {:?}", sus_answers);
+    tracing::debug!("Answers for SUS: {:?}", sus_answers);
 
     app_state
         .connection
@@ -458,7 +459,7 @@ async fn create_sus(
         .await
         .expect("Failed to insert into database");
 
-    println!("Inserted into database");
+    tracing::debug!("Inserted into database");
 
     Redirect::to("/")
 }
@@ -481,8 +482,6 @@ async fn surveys_page(
         )
         .await
         .expect("Failed to query surveys");
-
-    dbg!(rows.column_count());
 
     let mut surveys = Vec::new();
 
