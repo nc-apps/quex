@@ -31,13 +31,16 @@ pub(crate) async fn send_sign_in_email(
         html: format!("<h1><a href=\"{}\">Sign in to your account</a></h1>", url).to_owned(),
     };
 
-    let token = std::env::var("RESEND_API_KEY").expect("RESEND_API_KEY is not set");
-    client
-        .post("https://api.resend.com/emails")
-        .bearer_auth(token)
-        .json(&request)
-        .send()
-        .await?;
-
+    if cfg!(debug_assertions) {
+        tracing::info!("Not sending email in debug mode: {}", request.html);
+    } else {
+        let token = std::env::var("RESEND_API_KEY").expect("RESEND_API_KEY is not set");
+        client
+            .post("https://api.resend.com/emails")
+            .bearer_auth(token)
+            .json(&request)
+            .send()
+            .await?;
+    }
     Ok(())
 }
