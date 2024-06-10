@@ -1,8 +1,10 @@
 use std::{env, net::Ipv4Addr, time::Duration};
+use std::sync::Arc;
 
 use crate::auth::authenticated_user::AuthenticatedUser;
 use askama_axum::{IntoResponse, Template};
 use axum::{extract::State, http::Uri, response::Redirect, routing::get, Form, Router};
+use axum::http::StatusCode;
 use dotenv::dotenv;
 use libsql::{named_params, Builder, Connection, Database};
 use serde::{self, Deserialize};
@@ -55,11 +57,14 @@ async fn main() {
     let app = Router::new()
         .route("/", get(routes::index::get_page))
         .route("/nps", get(routes::net_promoter_score::get_page).post(routes::net_promoter_score::create_response))
+        .route("/nps/new", get(routes::net_promoter_score::create_new_survey))
         .route("/sus", get(routes::system_usability_score::get_page).post(routes::system_usability_score::create_response))
+        .route("/sus/new", get(routes::system_usability_score::create_new_survey))
         .route(
-            "/attrakdiff",
+            "/ad",
             get(routes::attrakdiff::get_page).post(routes::attrakdiff::create_response),
         )
+        .route("/ad/new", get(routes::attrakdiff::create_new_survey))
         .route("/surveys", get(surveys_page))
         .merge(auth_routes)
         // If the route could not be matched it might be a file
@@ -94,7 +99,7 @@ pub(crate) struct AppState {
 #[derive(Template)]
 #[template(path = "surveys.html")]
 struct SurveysTemplate {
-    surveys: Vec<u32>,
+    surveys: Vec<String>,
 }
 
 async fn surveys_page(
@@ -104,21 +109,39 @@ async fn surveys_page(
     let mut rows = app_state
         .connection
         .query(
-            "SELECT id FROM system_usability_score_surveys WHERE researcher_id = :researcher_id",
-            named_params![":researcher_id": user.id],
+            "SELECT id FROM system_usability_score_surveys WHERE user_id = :user_id",
+            named_params![":user_id": user.id],
         )
         .await
         .expect("Failed to query surveys");
 
     let mut surveys = Vec::new();
 
-    while let Ok(Some(row)) = rows.next().await {
-        let sus_survey: u32 = row.get(0).expect("Failed to get survey id");
-        surveys.push(sus_survey);
+    loop {
+        let result = rows.next().await;
+        match result {
+            Ok(Some(row)) => {
+                let result: Result<String, libsql::Error> = row.get(0);
+                match result {
+                    Ok(id) => surveys.push(id),
+                    Err(error) => {
+                        tracing::error!("Error reading survey id: {:?}", error);
+                        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                    }
+                }
+            }
+            // No more rows
+            Ok(None) => break,
+            Err(error) => {
+                tracing::error!("Error getting surveys: {:?}", error);
+                return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+            }
+        }
     }
 
+
     let surveys_template = SurveysTemplate { surveys };
-    surveys_template
+    surveys_template.into_response()
 }
 
 /// Runs forever and cleans up expired app data about every 5 minutes

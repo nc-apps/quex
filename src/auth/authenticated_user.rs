@@ -18,9 +18,9 @@ pub(crate) struct AuthenticatedUser {
 
 #[async_trait]
 impl<S> FromRequestParts<S> for AuthenticatedUser
-where
-    AppState: FromRef<S>,
-    S: Send + Sync,
+    where
+        AppState: FromRef<S>,
+        S: Send + Sync,
 {
     type Rejection = Response;
 
@@ -43,13 +43,13 @@ where
             .connection
             .query(
                 "SELECT
-                researcher_id,
+                user_id,
                 name,
                 email_address,
                 expires_at_utc
             FROM sessions
-            JOIN researchers
-                ON sessions.researcher_id = researchers.id
+            JOIN users
+                ON sessions.user_id = users.id
                 AND sessions.id = :session_id",
                 named_params![
                     ":session_id": session_id

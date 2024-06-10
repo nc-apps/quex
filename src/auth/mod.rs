@@ -33,17 +33,17 @@ struct CreateAccountRequest {
 
 async fn create_account(
     State(AppState {
-        connection,
-        configuration,
-        client,
-    }): State<AppState>,
+              connection,
+              configuration,
+              client,
+          }): State<AppState>,
     Form(request): Form<CreateAccountRequest>,
 ) -> impl IntoResponse {
     //TODO check if user aleady exists
     let user_id = nanoid!();
     connection
         .execute(
-            "INSERT INTO researchers (id, name, email_address) VALUES (:id, :name, :email_address)",
+            "INSERT INTO users (id, name, email_address) VALUES (:id, :name, :email_address)",
             named_params![
                 ":id": user_id.clone(),
                 ":name": request.name,
@@ -58,10 +58,10 @@ async fn create_account(
     let expires_at = expires_at.unix_timestamp();
     connection
         .execute(
-            "INSERT INTO signin_attempts VALUES (:id, :researcher_id, :expires_at)",
+            "INSERT INTO signin_attempts VALUES (:id, :user_id, :expires_at)",
             named_params![
                 ":id": attempt_id.clone(),
-                ":researcher_id": user_id,
+                ":user_id": user_id,
                 ":expires_at": expires_at,
             ],
         )
@@ -75,8 +75,8 @@ async fn create_account(
         attempt_id,
         configuration.server_url,
     )
-    .await
-    .unwrap();
+        .await
+        .unwrap();
 
     Redirect::to("/signup/completed")
 }
@@ -89,7 +89,7 @@ async fn complete_signin(
     // Check if sign in attempt exists
     let mut rows = connection
         .query(
-            "SELECT researcher_id, expires_at_utc FROM signin_attempts WHERE id = :id",
+            "SELECT user_id, expires_at_utc FROM signin_attempts WHERE id = :id",
             named_params![":id": attempt_id.clone()],
         )
         .await
@@ -105,7 +105,7 @@ async fn complete_signin(
         return Redirect::to("/signin/expired").into_response();
     }
 
-    let researcher_id: String = row.get(0).unwrap();
+    let user_id: String = row.get(0).unwrap();
 
     // Delete sign in attempt to prevent reusage
     connection
@@ -122,10 +122,10 @@ async fn complete_signin(
 
     connection
         .execute(
-            "INSERT INTO sessions (id, researcher_id, expires_at_utc) VALUES (:id, :researcher_id, :expires_at_utc)",
+            "INSERT INTO sessions (id, user_id, expires_at_utc) VALUES (:id, :user_id, :expires_at_utc)",
             named_params![
                 ":id": session_id.clone(),
-                ":researcher_id": researcher_id,
+                ":user_id": user_id,
                 ":expires_at_utc": expires_at.unix_timestamp(),
             ],
         )
@@ -172,16 +172,16 @@ struct SignInRequest {
 
 async fn sign_in(
     State(AppState {
-        connection,
-        configuration,
-        client,
-    }): State<AppState>,
+              connection,
+              configuration,
+              client,
+          }): State<AppState>,
     Form(request): Form<SignInRequest>,
 ) -> Redirect {
     // Get user id
     let mut rows = connection
         .query(
-            "SELECT id, email_address FROM researchers WHERE email_address = :email",
+            "SELECT id, email_address FROM users WHERE email_address = :email",
             named_params![":email": request.email],
         )
         .await
@@ -203,10 +203,10 @@ async fn sign_in(
 
     connection
         .execute(
-            "INSERT INTO signin_attempts VALUES (:id, :researcher_id, :expires_at)",
+            "INSERT INTO signin_attempts VALUES (:id, :user_id, :expires_at)",
             named_params![
                 ":id": attempt_id.clone(),
-                ":researcher_id": user_id,
+                ":user_id": user_id,
                 ":expires_at": expires_at,
             ],
         )
@@ -220,8 +220,8 @@ async fn sign_in(
         attempt_id,
         configuration.server_url,
     )
-    .await
-    .unwrap();
+        .await
+        .unwrap();
 
     Redirect::to("/signin/completed")
 }
@@ -233,6 +233,7 @@ struct SignUpTemplate {}
 #[derive(Template)]
 #[template(path = "sign_in.html")]
 struct SignInTemplate {}
+
 async fn sign_up_handler(user: Option<AuthenticatedUser>) -> impl IntoResponse {
     // Check if is already authenticated and redirect to surveys
     // Ideally they should not land on the signup page if they are already authenticated
@@ -260,6 +261,7 @@ async fn sign_in_handler(user: Option<AuthenticatedUser>) -> impl IntoResponse {
 #[derive(Template)]
 #[template(path = "signin_expired.html")]
 struct SigninExpiredTemplate {}
+
 async fn sign_in_expired() -> impl IntoResponse {
     let sign_in_expired_template = SigninExpiredTemplate {};
 
