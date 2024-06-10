@@ -4,7 +4,7 @@ content %}
 <a href="/">Home</a>
 <h1>My Surveys</h1>
 {% for survey in surveys %}
-<a href="/sus/{{ survey }}">SUS Survey {{ survey }}</a>
+<a href="/{{ survey }}">SUS Survey {{ survey }}</a>
 {% endfor %}
 <a class="block" href="/sus/new">New System Usability Score (SUS) Survey</a>
 <a class="block" href="/ad/new">New AttrakDiff Survey</a>
