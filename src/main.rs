@@ -11,6 +11,7 @@ use serde::{self, Deserialize};
 use tower_http::services::ServeDir;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
+use crate::routes::survey;
 
 mod auth;
 mod email;
@@ -52,21 +53,13 @@ async fn main() {
     };
 
     let auth_routes = auth::create_router();
+    let survey_routes = survey::create_router();
 
     // Build our application with a route
     let app = Router::new()
         .route("/", get(routes::index::get_page))
-        .route("/nps", get(routes::net_promoter_score::get_page).post(routes::net_promoter_score::create_response))
-        .route("/nps/new", get(routes::net_promoter_score::create_new_survey))
-        .route("/sus", get(routes::system_usability_score::get_page).post(routes::system_usability_score::create_response))
-        .route("/sus/new", get(routes::system_usability_score::create_new_survey))
-        .route(
-            "/ad",
-            get(routes::attrakdiff::get_page).post(routes::attrakdiff::create_response),
-        )
-        .route("/ad/new", get(routes::attrakdiff::create_new_survey))
-        .route("/surveys", get(surveys_page))
         .merge(auth_routes)
+        .merge(survey_routes)
         // If the route could not be matched it might be a file
         .fallback_service(ServeDir::new("public"))
         .with_state(app_state);
@@ -93,55 +86,6 @@ pub(crate) struct AppState {
     connection: Connection,
     client: reqwest::Client,
     configuration: Configuration,
-}
-
-
-#[derive(Template)]
-#[template(path = "surveys.html")]
-struct SurveysTemplate {
-    surveys: Vec<String>,
-}
-
-async fn surveys_page(
-    user: AuthenticatedUser,
-    State(app_state): State<AppState>,
-) -> impl IntoResponse {
-    let mut rows = app_state
-        .connection
-        .query(
-            "SELECT id FROM system_usability_score_surveys WHERE user_id = :user_id",
-            named_params![":user_id": user.id],
-        )
-        .await
-        .expect("Failed to query surveys");
-
-    let mut surveys = Vec::new();
-
-    loop {
-        let result = rows.next().await;
-        match result {
-            Ok(Some(row)) => {
-                let result: Result<String, libsql::Error> = row.get(0);
-                match result {
-                    Ok(id) => surveys.push(id),
-                    Err(error) => {
-                        tracing::error!("Error reading survey id: {:?}", error);
-                        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-                    }
-                }
-            }
-            // No more rows
-            Ok(None) => break,
-            Err(error) => {
-                tracing::error!("Error getting surveys: {:?}", error);
-                return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-            }
-        }
-    }
-
-
-    let surveys_template = SurveysTemplate { surveys };
-    surveys_template.into_response()
 }
 
 /// Runs forever and cleans up expired app data about every 5 minutes
