@@ -8,6 +8,8 @@ use axum::Form;
 use libsql::named_params;
 use nanoid::nanoid;
 use serde::Deserialize;
+use time::OffsetDateTime;
+use crate::routes::survey::CreateSurveyRequest;
 
 #[derive(Template)]
 #[template(path = "attrakdiff.html")]
@@ -226,13 +228,39 @@ pub(super) async fn create_response(
 pub(super) async fn create_new_survey(
     State(state): State<AppState>,
     user: AuthenticatedUser,
+    Form(request): Form<CreateSurveyRequest>,
 ) -> impl IntoResponse {
     let survey_id = nanoid!();
+
+    // Use the first 6 characters of the survey id as the name if no name is provided
+    let name = request.name.unwrap_or_else(|| format!("AttrakDiff Survey {}", &survey_id[..7]));
+
+    // Create timestamp
+    // We could use the database timestamp, but I prefer to have the application dictate the time in
+    // case something goes wrong
+    let now = OffsetDateTime::now_utc().unix_timestamp();
+
     let result = state
         .connection
         .execute(
-            "INSERT INTO attrakdiff_surveys (id, user_id) VALUES (:id, :user_id)",
-            named_params! {":id":survey_id.clone(), ":user_id":user.id },
+            "INSERT INTO attrakdiff_surveys (\
+                id,\
+                user_id,\
+                name,\
+                created_at_utc\
+                ) \
+                VALUES (\
+                    :id,\
+                    :user_id,\
+                    :name,\
+                    :created_at_utc\
+                )",
+            named_params! {
+                ":id":survey_id.clone(),
+                ":user_id":user.id,
+                ":name":name,
+                ":created_at_utc":now
+            },
         )
         .await;
 

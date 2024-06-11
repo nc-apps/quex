@@ -1,5 +1,5 @@
 use crate::auth::authenticated_user::AuthenticatedUser;
-use crate::{routes, AppState};
+use crate::{AppState, routes};
 use askama::Template;
 use askama_axum::IntoResponse;
 use axum::body::Body;
@@ -10,8 +10,9 @@ use axum::http::StatusCode;
 use axum::response::{Redirect, Response};
 use axum::routing::get;
 use axum::{Form, Router};
-use libsql::{named_params, Connection};
+use libsql::{Connection, named_params};
 use std::sync::Arc;
+use serde::Deserialize;
 
 mod attrakdiff;
 mod net_promoter_score;
@@ -264,4 +265,11 @@ async fn get_survey_page(
         Survey::NetPromoterScore => net_promoter_score::get_page(),
         Survey::SystemUsabilityScore => system_usability_score::get_page(),
     })
+}
+
+#[derive(Deserialize, Debug)]
+pub(in crate::routes::survey) struct CreateSurveyRequest {
+    /// The name of the survey. It is optional to reduce user friction and we crate a random name if
+    /// it is not provided.
+    name: Option<String>,
 }
