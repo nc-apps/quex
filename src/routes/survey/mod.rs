@@ -6,9 +6,9 @@ use axum::extract::{FromRequest, Path, Request, State};
 use axum::response::{Redirect, Response};
 use axum::routing::{get, post};
 use axum::{Form, Router};
-use libsql::{Connection, named_params};
-use std::sync::Arc;
+use libsql::{named_params, Connection};
 use serde::Deserialize;
+use std::sync::Arc;
 
 mod attrakdiff;
 mod net_promoter_score;
@@ -282,7 +282,11 @@ async fn create_survey(
 ) -> Redirect {
     match request.r#type {
         SurveyType::Attrakdiff => attrakdiff::create_new_survey(state, user, request.name).await,
-        SurveyType::NetPromoterScore => net_promoter_score::create_new_survey(state, user, request.name).await,
-        SurveyType::SystemUsabilityScore => system_usability_score::create_new_survey(state, user, request.name).await,
+        SurveyType::NetPromoterScore => {
+            net_promoter_score::create_new_survey(state, user, request.name).await
+        }
+        SurveyType::SystemUsabilityScore => {
+            system_usability_score::create_new_survey(state, user, request.name).await
+        }
     }
 }

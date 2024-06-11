@@ -1,4 +1,3 @@
-use std::sync::Arc;
 use crate::auth::authenticated_user::AuthenticatedUser;
 use crate::AppState;
 use askama::Template;
@@ -9,6 +8,7 @@ use axum::Form;
 use libsql::named_params;
 use nanoid::nanoid;
 use serde::Deserialize;
+use std::sync::Arc;
 use time::OffsetDateTime;
 
 #[derive(Template)]
@@ -235,7 +235,7 @@ pub(super) async fn create_new_survey(
     let name: Arc<str> = match name.as_deref() {
         // Use the first 6 characters of the survey id as the name if no name is provided
         Some("") | None => format!("AttrakDiff Survey {}", &survey_id[..7]).into(),
-        Some(name) => name.into()
+        Some(name) => name.into(),
     };
 
     // Create timestamp
