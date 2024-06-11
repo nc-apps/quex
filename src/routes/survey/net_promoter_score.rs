@@ -60,8 +60,8 @@ pub(super) async fn create_new_survey(State(state): State<AppState>, user: Authe
         return Redirect::to("/");
     }
 
-    // Redirect to newly created survey
-    Redirect::to(format!("/{}", survey_id).as_ref())
+    // Redirect to newly created survey overview
+    Redirect::to(format!("/surveys/nps/{}", survey_id).as_ref())
 }
 
 
