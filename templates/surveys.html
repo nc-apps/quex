@@ -32,16 +32,22 @@ content %}
 </ul>
 
 <h2>Create New Survey</h2>
-<menu>
-    <li>
-        <a class="block" href="/surveys/ad/new">New AttrakDiff Survey</a>
-    </li>
-    <li>
-        <a class="block" href="/surveys/nps/new">New Net Promoter Score (NPS) Survey</a>
-    </li>
-    <li>
-        <a class="block" href="/surveys/sus/new">New System Usability Score (SUS) Survey</a>
-    </li>
-</menu>
+<form method="post" action="/surveys">
+    <label for="name">Name</label>
+    {# Not required #}
+    <input id="name" name="name" type="text">
+    {# Not using separate submit buttons with different "formactions" for each survey type because using the enter key
+    will always submit to the first submit button #}
+    <fieldset>
+        <legend>Survey Type</legend>
+        <input id="attrakdiff" name="type" type="radio" value="attrakdiff" required>
+        <label for="attrakdiff">AttrakDiff</label>
+        <input id="nps" name="type" type="radio" value="nps" required>
+        <label for="nps">Net Promoter Score</label>
+        <input id="sus" name="type" type="radio" value="sus" required>
+        <label for="sus">System Usability Score</label>
+    </fieldset>
+    <button type="submit" class="block">Submit</button>
+</form>
 
 {% call super() %} {% endblock %}

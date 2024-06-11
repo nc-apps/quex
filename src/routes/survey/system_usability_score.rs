@@ -102,11 +102,11 @@ pub(super) async fn create_response(
 pub(super) async fn create_new_survey(
     State(state): State<AppState>,
     user: AuthenticatedUser,
-    Form(request): Form<CreateSurveyRequest>,
-) -> impl IntoResponse {
+    name: Option<String>,
+) -> Redirect {
     let survey_id = nanoid!();
 
-    let name: Arc<str> = match request.name.as_deref() {
+    let name: Arc<str> = match name.as_deref() {
         // Use the first 6 characters of the survey id as the name if no name is provided
         Some("") | None => format!("System Usability Score Survey {}", &survey_id[..7]).into(),
         Some(name) => name.into()
