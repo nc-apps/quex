@@ -10,7 +10,6 @@ use libsql::named_params;
 use nanoid::nanoid;
 use serde::Deserialize;
 use time::OffsetDateTime;
-use crate::routes::survey::CreateSurveyRequest;
 
 #[derive(Template)]
 #[template(path = "attrakdiff.html")]

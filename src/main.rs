@@ -1,14 +1,9 @@
-use std::sync::Arc;
 use std::{env, net::Ipv4Addr, time::Duration};
 
-use crate::auth::authenticated_user::AuthenticatedUser;
 use crate::routes::survey;
-use askama_axum::{IntoResponse, Template};
-use axum::http::StatusCode;
-use axum::{extract::State, http::Uri, response::Redirect, routing::get, Form, Router};
+use axum::{http::Uri, routing::get, Router};
 use dotenv::dotenv;
-use libsql::{named_params, Builder, Connection, Database};
-use serde::{self, Deserialize};
+use libsql::{named_params, Connection};
 use tower_http::services::ServeDir;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;

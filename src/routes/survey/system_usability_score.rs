@@ -3,7 +3,6 @@ use crate::auth::authenticated_user::AuthenticatedUser;
 use crate::AppState;
 use askama::Template;
 use askama_axum::IntoResponse;
-use axum::body::Body;
 use axum::extract::{Path, State};
 use axum::response::Redirect;
 use axum::Form;
@@ -11,7 +10,6 @@ use libsql::named_params;
 use nanoid::nanoid;
 use serde::Deserialize;
 use time::OffsetDateTime;
-use crate::routes::survey::CreateSurveyRequest;
 
 #[derive(Template)]
 #[template(path = "sus.html")]
