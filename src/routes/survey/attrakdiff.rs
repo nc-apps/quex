@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use crate::auth::authenticated_user::AuthenticatedUser;
 use crate::AppState;
 use askama::Template;
@@ -232,10 +233,10 @@ pub(super) async fn create_new_survey(
 ) -> impl IntoResponse {
     let survey_id = nanoid!();
 
-    let name = match request.name.as_deref() {
+    let name: Arc<str> = match request.name.as_deref() {
         // Use the first 6 characters of the survey id as the name if no name is provided
-        Some("") | None => format!("AttrakDiff Survey {}", &survey_id[..7]).as_ref(),
-        Some(name) => name
+        Some("") | None => format!("AttrakDiff Survey {}", &survey_id[..7]).into(),
+        Some(name) => name.into()
     };
 
     // Create timestamp
