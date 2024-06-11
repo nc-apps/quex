@@ -71,7 +71,7 @@ pub(super) async fn create_new_survey(State(state): State<AppState>, user: Authe
 struct NetPromoterScoreResultsTemplate {}
 
 pub(super) async fn get_results_page(State(state): State<AppState>, Path(survey_id): Path<String>, user: AuthenticatedUser) -> impl IntoResponse {
-    let result = state.connection.query("SELECT * FROM net_promoter_score_surveys WHERE user_id = :user_id AND survey_id = :survey_id", named_params![":user_id": user.id, ":survey_id": survey_id]).await;
+    let result = state.connection.query("SELECT * FROM net_promoter_score_surveys WHERE user_id = :user_id AND id = :survey_id", named_params![":user_id": user.id, ":survey_id": survey_id]).await;
 
     let mut rows = match result {
         Ok(rows) => rows,

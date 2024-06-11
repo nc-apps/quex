@@ -3,11 +3,45 @@ content %}
 
 <a href="/">Home</a>
 <h1>My Surveys</h1>
-{% for survey in surveys %}
-<a href="/{{ survey }}">SUS Survey {{ survey }}</a>
-{% endfor %}
-<a class="block" href="/sus/new">New System Usability Score (SUS) Survey</a>
-<a class="block" href="/ad/new">New AttrakDiff Survey</a>
-<a class="block" href="/nps/new">New Net Promoter Score (NPS) Survey</a>
+
+<h2>AttrakDiff</h2>
+<ul>
+    {% for survey_id in surveys.attrakdiff %}
+    <li>
+        <a href="/surveys/ad/{{ survey_id }}">AD Survey {{ survey_id }}</a>
+    </li>
+    {% endfor %}
+</ul>
+
+<h2>Net Promoter Score</h2>
+<ul>
+    {% for survey_id in surveys.net_promoter_score %}
+    <li>
+        <a href="/surveys/nps/{{ survey_id }}">NPS Survey {{ survey_id }}</a>
+    </li>
+    {% endfor %}
+</ul>
+
+<h2>System Usability Score</h2>
+<ul>
+    {% for survey_id in surveys.system_usability_score %}
+    <li>
+        <a href="/surveys/sus/{{ survey_id }}">SUS Survey {{ survey_id }}</a>
+    </li>
+    {% endfor %}
+</ul>
+
+<h2>Create New Survey</h2>
+<menu>
+    <li>
+        <a class="block" href="/surveys/sus/new">New System Usability Score (SUS) Survey</a>
+    </li>
+    <li>
+        <a class="block" href="/surveys/ad/new">New AttrakDiff Survey</a>
+    </li>
+    <li>
+        <a class="block" href="/surveys/nps/new">New Net Promoter Score (NPS) Survey</a>
+    </li>
+</menu>
 
 {% call super() %} {% endblock %}

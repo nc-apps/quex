@@ -18,14 +18,17 @@ mod attrakdiff;
 mod system_usability_score;
 
 pub(crate) fn create_router() -> Router<AppState> {
-    Router::new()
-        .route("/surveys", get(surveys_page))
+    let survey_routes = Router::new()
         .route("/nps/new", get(net_promoter_score::create_new_survey))
         .route("/nps/:id", get(net_promoter_score::get_results_page))
         .route("/sus/new", get(system_usability_score::create_new_survey))
         .route("/sus/:id", get(system_usability_score::get_results_page))
         .route("/ad/new", get(attrakdiff::create_new_survey))
-        .route("/ad/:id", get(attrakdiff::get_results_page))
+        .route("/ad/:id", get(attrakdiff::get_results_page));
+
+    Router::new()
+        .route("/surveys", get(surveys_page))
+        .nest("/surveys", survey_routes)
         // These are the public endpoints that respondents can use to access a questionnaire
         // and submit their responses.
         // There are multiple things to reduce friction for respondents:
@@ -35,37 +38,85 @@ pub(crate) fn create_router() -> Router<AppState> {
         .route("/:survey_id", get(get_survey_page).post(create_response))
 }
 
+
+/// Contains vectors for each survey type with the survey ids
+#[derive(Default)]
+struct Surveys {
+    attrakdiff: Vec<String>,
+    net_promoter_score: Vec<String>,
+    system_usability_score: Vec<String>,
+}
+
 #[derive(Template)]
 #[template(path = "surveys.html")]
 struct SurveysTemplate {
-    surveys: Vec<String>,
+    surveys: Surveys,
 }
 
 async fn surveys_page(
     user: AuthenticatedUser,
     State(app_state): State<AppState>,
-) -> impl IntoResponse {
-    let mut rows = app_state
+) -> Result<askama_axum::Response, Redirect> {
+    const GET_USER_SURVEYS_QUERY: &str =
+        "SELECT * FROM (
+                SELECT 'attrakdiff' as type, * FROM attrakdiff_surveys
+                UNION ALL
+                SELECT 'net promoter score' as type, * FROM net_promoter_score_surveys
+                UNION ALL
+                SELECT 'system usability score' as type, * FROM system_usability_score_surveys
+            )
+                WHERE user_id = :user_id";
+
+    let result = app_state
         .connection
         .query(
-            "SELECT id FROM system_usability_score_surveys WHERE user_id = :user_id",
+            GET_USER_SURVEYS_QUERY,
             named_params![":user_id": user.id],
         )
-        .await
-        .expect("Failed to query surveys");
+        .await;
 
-    let mut surveys = Vec::new();
+    let mut rows = match result {
+        Ok(rows) => rows,
+        Err(error) => {
+            tracing::error!("Error getting surveys: {:?}", error);
+            //TODO display user error message it's not their fault
+            return Err(Redirect::to("/surveys/error"));
+        }
+    };
+
+    let mut surveys = Surveys::default();
 
     loop {
         let result = rows.next().await;
         match result {
             Ok(Some(row)) => {
                 let result: Result<String, libsql::Error> = row.get(0);
-                match result {
-                    Ok(id) => surveys.push(id),
+                let survey_type = match result {
+                    Ok(survey_type) => survey_type,
                     Err(error) => {
                         tracing::error!("Error reading survey id: {:?}", error);
-                        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                        //TODO display user error message it's not their fault
+                        return Err(Redirect::to("/surveys/error"));
+                    }
+                };
+
+                let result: Result<String, libsql::Error> = row.get(1);
+                let id = match result {
+                    Ok(id) => id,
+                    Err(error) => {
+                        tracing::error!("Error reading survey id: {:?}", error);
+                        //TODO display user error message it's not their fault
+                        return Err(Redirect::to("/surveys/error"));
+                    }
+                };
+
+                match survey_type.as_str() {
+                    "attrakdiff" => surveys.attrakdiff.push(id),
+                    "net promoter score" => surveys.net_promoter_score.push(id),
+                    "system usability score" => surveys.system_usability_score.push(id),
+                    other => {
+                        tracing::error!("Unexpected unknown survey type: {}", other);
+                        return Err(Redirect::to("/surveys/error"));
                     }
                 }
             }
@@ -73,13 +124,14 @@ async fn surveys_page(
             Ok(None) => break,
             Err(error) => {
                 tracing::error!("Error getting surveys: {:?}", error);
-                return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                //TODO display user error message it's not their fault
+                return Err(Redirect::to("/surveys/error"));
             }
         }
     }
 
     let surveys_template = SurveysTemplate { surveys };
-    surveys_template.into_response()
+    Ok(surveys_template.into_response())
 }
 
 const GET_SURVEY_QUERY: &str =
