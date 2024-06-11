@@ -9,18 +9,24 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS system_usability_score_surveys (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    created_at_utc INTEGER NOT NULL,
     FOREIGN KEY(user_id) REFERENCES users(id)
 );
 
 CREATE TABLE IF NOT EXISTS net_promoter_score_surveys (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    created_at_utc INTEGER NOT NULL,
     FOREIGN KEY(user_id) REFERENCES users(id)
 );
 
 CREATE TABLE IF NOT EXISTS attrakdiff_surveys (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    created_at_utc INTEGER NOT NULL,
     FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
