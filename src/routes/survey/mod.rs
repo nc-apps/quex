@@ -8,7 +8,7 @@ use axum::extract::{FromRequest, Path, Request, State};
 use axum::http::request::Parts;
 use axum::http::StatusCode;
 use axum::response::{Redirect, Response};
-use axum::routing::get;
+use axum::routing::{get, post};
 use axum::{Form, Router};
 use libsql::{Connection, named_params};
 use std::sync::Arc;
@@ -20,11 +20,11 @@ mod system_usability_score;
 
 pub(crate) fn create_router() -> Router<AppState> {
     let survey_routes = Router::new()
-        .route("/nps/new", get(net_promoter_score::create_new_survey))
+        .route("/nps", post(net_promoter_score::create_new_survey))
         .route("/nps/:id", get(net_promoter_score::get_results_page))
-        .route("/sus/new", get(system_usability_score::create_new_survey))
+        .route("/sus", post(system_usability_score::create_new_survey))
         .route("/sus/:id", get(system_usability_score::get_results_page))
-        .route("/ad/new", get(attrakdiff::create_new_survey))
+        .route("/ad", post(attrakdiff::create_new_survey))
         .route("/ad/:id", get(attrakdiff::get_results_page));
 
     Router::new()
