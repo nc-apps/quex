@@ -105,8 +105,11 @@ pub(super) async fn create_new_survey(
 ) -> impl IntoResponse {
     let survey_id = nanoid!();
 
-    // Use the first 6 characters of the survey id as the name if no name is provided
-    let name = request.name.unwrap_or_else(|| format!("System Usability Score Survey {}", &survey_id[..7]));
+    let name = match request.name.as_deref() {
+        // Use the first 6 characters of the survey id as the name if no name is provided
+        Some("") | None => format!("System Usability Score Survey {}", &survey_id[..7]).as_ref(),
+        Some(name) => name
+    };
 
     // Create timestamp
     // We could use the database timestamp, but I prefer to have the application dictate the time in
