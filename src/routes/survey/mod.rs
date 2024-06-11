@@ -36,7 +36,7 @@ pub(crate) fn create_router() -> Router<AppState> {
         // 1. They don't need an account/sign in to access the survey
         // 2. They don't need a long URL to access the survey. The survey id is enough
         // Additionally the survey type is not leaked in the URL to avoid biasing the responses
-        .route("/:survey_id", get(get_survey_page).post(create_response))
+        .route("/q/:survey_id", get(get_survey_page).post(create_response))
 }
 
 /// Contains vectors for each survey type with the survey ids
