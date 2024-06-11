@@ -1,6 +1,6 @@
 use askama::Template;
 use askama_axum::IntoResponse;
-use axum::extract::State;
+use axum::extract::{Path, State};
 use axum::Form;
 use axum::response::Redirect;
 use libsql::named_params;
@@ -15,8 +15,7 @@ struct AttrakDiffTemplate {
     questions: Vec<(String, String)>,
 }
 
-
-pub(crate) async fn get_page() -> impl IntoResponse {
+pub(super) fn get_page() -> askama_axum::Response {
     let attrakdiff_template = AttrakDiffTemplate {
         questions: vec![
             ("Human".to_string(), "Technical".to_string()),
@@ -53,12 +52,11 @@ pub(crate) async fn get_page() -> impl IntoResponse {
         ],
     };
 
-    attrakdiff_template
+    attrakdiff_template.into_response()
 }
 
-
 #[derive(Deserialize, Debug)]
-pub(crate) struct AttrakdiffResponses {
+pub(super) struct Response {
     #[serde(rename = "Q1")]
     q1: u8,
     #[serde(rename = "Q2")]
@@ -117,10 +115,10 @@ pub(crate) struct AttrakdiffResponses {
     q28: u8,
 }
 
-pub(crate) async fn create_response(
+pub(super) async fn create_response(
     State(app_state): State<AppState>,
-    Form(attrakdiff_answers): Form<AttrakdiffResponses>,
-) -> impl IntoResponse {
+    Form(attrakdiff_answers): Form<Response>,
+) -> Redirect {
     tracing::debug!("Answers for AttrakDiff: {:?}", attrakdiff_answers);
 
     app_state
@@ -222,10 +220,10 @@ pub(crate) async fn create_response(
 
     tracing::debug!("Inserted into database");
 
-    Redirect::to("/")
+    Redirect::to("/thanks")
 }
 
-pub(crate) async fn create_new_survey(State(state): State<AppState>, user: AuthenticatedUser) -> impl IntoResponse {
+pub(super) async fn create_new_survey(State(state): State<AppState>, user: AuthenticatedUser) -> impl IntoResponse {
     let survey_id = nanoid!();
     let result = state.connection.execute(
         "INSERT INTO attrakdiff_surveys (id, user_id) VALUES (:id, :user_id)",
@@ -239,4 +237,38 @@ pub(crate) async fn create_new_survey(State(state): State<AppState>, user: Authe
 
     // Redirect to newly created survey
     Redirect::to(format!("/{}", survey_id).as_ref())
+}
+
+//TODO consider renaming to evaluation or something more fitting
+#[derive(Template)]
+#[template(path = "results/attrakdiff.html")]
+struct AttrakdiffResultsTemplate {}
+
+pub(super) async fn get_results_page(State(state): State<AppState>, Path(survey_id): Path<String>, user: AuthenticatedUser) -> impl IntoResponse {
+    let result = state.connection.query("SELECT * FROM attrakdiff_surveys WHERE user_id = :user_id AND survey_id = :survey_id", named_params![":user_id": user.id, ":survey_id": survey_id]).await;
+
+    let mut rows = match result {
+        Ok(rows) => rows,
+        Err(error) => {
+            tracing::error!("Error querying for AttrakDiff survey: {:?}", error);
+            //TODO display user error message it's not their fault
+            return Redirect::to("/surveys").into_response();
+        }
+    };
+
+    let result = rows.next().await;
+    //TODO put data we want to display into template
+    let _row = match result {
+        Ok(Some(row)) => row,
+        // Survey not found. It wasn't created (yet), or deleted
+        //TODO display user error message
+        Ok(None) => return Redirect::to("/surveys").into_response(),
+        Err(error) => {
+            tracing::error!("Error reading query result: {:?}", error);
+            //TODO display user error message it's not their fault
+            return Redirect::to("/surveys").into_response();
+        }
+    };
+
+    AttrakdiffResultsTemplate {}.into_response()
 }

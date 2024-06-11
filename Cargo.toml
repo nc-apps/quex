@@ -32,3 +32,5 @@ tower-http = { version = "0.5.2", features = ["fs"] }
 # For logging and telemetry to get better insights into what is going on inisde the app
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+# Useful macros to make implementing errors easier
+thiserror = "1.0.61"
