@@ -1,21 +1,21 @@
-use std::{env, net::Ipv4Addr, time::Duration};
 use std::sync::Arc;
+use std::{env, net::Ipv4Addr, time::Duration};
 
 use crate::auth::authenticated_user::AuthenticatedUser;
+use crate::routes::survey;
 use askama_axum::{IntoResponse, Template};
-use axum::{extract::State, http::Uri, response::Redirect, routing::get, Form, Router};
 use axum::http::StatusCode;
+use axum::{extract::State, http::Uri, response::Redirect, routing::get, Form, Router};
 use dotenv::dotenv;
 use libsql::{named_params, Builder, Connection, Database};
 use serde::{self, Deserialize};
 use tower_http::services::ServeDir;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
-use crate::routes::survey;
 
 mod auth;
-mod email;
 mod database;
+mod email;
 mod routes;
 
 #[tokio::main]
@@ -72,7 +72,6 @@ async fn main() {
     tracing::debug!("listening on http://{}", listener.local_addr().unwrap());
     axum::serve(listener, app).await.unwrap();
 }
-
 
 #[derive(Clone)]
 pub(crate) struct Configuration {

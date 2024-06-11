@@ -1,6 +1,6 @@
+use crate::auth::authenticated_user::AuthenticatedUser;
 use askama::Template;
 use askama_axum::IntoResponse;
-use crate::auth::authenticated_user::AuthenticatedUser;
 
 #[derive(Template)]
 #[template(path = "index.html")]

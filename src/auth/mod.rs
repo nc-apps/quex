@@ -33,10 +33,10 @@ struct CreateAccountRequest {
 
 async fn create_account(
     State(AppState {
-              connection,
-              configuration,
-              client,
-          }): State<AppState>,
+        connection,
+        configuration,
+        client,
+    }): State<AppState>,
     Form(request): Form<CreateAccountRequest>,
 ) -> impl IntoResponse {
     //TODO check if user aleady exists
@@ -75,8 +75,8 @@ async fn create_account(
         attempt_id,
         configuration.server_url,
     )
-        .await
-        .unwrap();
+    .await
+    .unwrap();
 
     Redirect::to("/signup/completed")
 }
@@ -172,10 +172,10 @@ struct SignInRequest {
 
 async fn sign_in(
     State(AppState {
-              connection,
-              configuration,
-              client,
-          }): State<AppState>,
+        connection,
+        configuration,
+        client,
+    }): State<AppState>,
     Form(request): Form<SignInRequest>,
 ) -> Redirect {
     // Get user id
@@ -220,8 +220,8 @@ async fn sign_in(
         attempt_id,
         configuration.server_url,
     )
-        .await
-        .unwrap();
+    .await
+    .unwrap();
 
     Redirect::to("/signin/completed")
 }

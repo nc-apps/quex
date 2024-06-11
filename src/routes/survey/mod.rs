@@ -1,20 +1,20 @@
-use std::sync::Arc;
+use crate::auth::authenticated_user::AuthenticatedUser;
+use crate::{routes, AppState};
 use askama::Template;
 use askama_axum::IntoResponse;
+use axum::body::Body;
+use axum::extract::rejection::FormRejection;
 use axum::extract::{FromRequest, Path, Request, State};
 use axum::http::request::Parts;
 use axum::http::StatusCode;
 use axum::response::{Redirect, Response};
-use axum::{Form, Router};
-use axum::body::Body;
-use axum::extract::rejection::FormRejection;
 use axum::routing::get;
-use libsql::{Connection, named_params};
-use crate::{AppState, routes};
-use crate::auth::authenticated_user::AuthenticatedUser;
+use axum::{Form, Router};
+use libsql::{named_params, Connection};
+use std::sync::Arc;
 
-mod net_promoter_score;
 mod attrakdiff;
+mod net_promoter_score;
 mod system_usability_score;
 
 pub(crate) fn create_router() -> Router<AppState> {
@@ -38,7 +38,6 @@ pub(crate) fn create_router() -> Router<AppState> {
         .route("/:survey_id", get(get_survey_page).post(create_response))
 }
 
-
 /// Contains vectors for each survey type with the survey ids
 #[derive(Default)]
 struct Surveys {
@@ -57,8 +56,7 @@ async fn surveys_page(
     user: AuthenticatedUser,
     State(app_state): State<AppState>,
 ) -> Result<askama_axum::Response, Redirect> {
-    const GET_USER_SURVEYS_QUERY: &str =
-        "SELECT * FROM (
+    const GET_USER_SURVEYS_QUERY: &str = "SELECT * FROM (
                 SELECT 'attrakdiff' as type, * FROM attrakdiff_surveys
                 UNION ALL
                 SELECT 'net promoter score' as type, * FROM net_promoter_score_surveys
@@ -69,10 +67,7 @@ async fn surveys_page(
 
     let result = app_state
         .connection
-        .query(
-            GET_USER_SURVEYS_QUERY,
-            named_params![":user_id": user.id],
-        )
+        .query(GET_USER_SURVEYS_QUERY, named_params![":user_id": user.id])
         .await;
 
     let mut rows = match result {
@@ -134,8 +129,7 @@ async fn surveys_page(
     Ok(surveys_template.into_response())
 }
 
-const GET_SURVEY_QUERY: &str =
-    "SELECT * FROM (
+const GET_SURVEY_QUERY: &str = "SELECT * FROM (
             SELECT 'attrakdiff' as type, * FROM attrakdiff_surveys
             UNION ALL
             SELECT 'net promoter score' as type, * FROM net_promoter_score_surveys
@@ -159,8 +153,10 @@ enum GetSurveyError {
 }
 
 /// Helper function to get a survey from the database
-async fn get_survey(connection: &Connection, survey_id: &str) -> Result<Option<Survey>, GetSurveyError> {
-
+async fn get_survey(
+    connection: &Connection,
+    survey_id: &str,
+) -> Result<Option<Survey>, GetSurveyError> {
     //TODO possibly optimize this as we don't know the type of the survey from the path alone,
     // but also want the path to be easy to enter for users and don't reveal information that could
     // bias the responses like the survey type
@@ -168,10 +164,14 @@ async fn get_survey(connection: &Connection, survey_id: &str) -> Result<Option<S
     // Could maybe optimize this by filtering on each subquery but that needs to be measured first
     // maybe with EXPLAIN SQLite query plan if you understand how that works
 
-    let mut rows = connection.query(GET_SURVEY_QUERY, named_params![":survey_id": survey_id]).await?;
+    let mut rows = connection
+        .query(GET_SURVEY_QUERY, named_params![":survey_id": survey_id])
+        .await?;
 
     let row = rows.next().await?;
-    let Some(row) = row else { return Ok(None); };
+    let Some(row) = row else {
+        return Ok(None);
+    };
     let survey_type = row.get::<String>(0)?;
     match survey_type.as_str() {
         "attrakdiff" => Ok(Some(Survey::Attrakdiff)),
@@ -215,15 +215,21 @@ async fn create_response(
     // Wrote this very late. Might not be the best code
     match survey {
         Survey::Attrakdiff => {
-            let form = Form::<attrakdiff::Response>::from_request(request, &state).await.map_err(|error| error.into_response())?;
+            let form = Form::<attrakdiff::Response>::from_request(request, &state)
+                .await
+                .map_err(|error| error.into_response())?;
             Ok(attrakdiff::create_response(state, form).await)
         }
         Survey::NetPromoterScore => {
-            let form = Form::<net_promoter_score::Response>::from_request(request, &state).await.map_err(|error| error.into_response())?;
+            let form = Form::<net_promoter_score::Response>::from_request(request, &state)
+                .await
+                .map_err(|error| error.into_response())?;
             Ok(net_promoter_score::create_response(state, form).await)
         }
         Survey::SystemUsabilityScore => {
-            let form = Form::<system_usability_score::Response>::from_request(request, &state).await.map_err(|error| error.into_response())?;
+            let form = Form::<system_usability_score::Response>::from_request(request, &state)
+                .await
+                .map_err(|error| error.into_response())?;
             Ok(system_usability_score::create_response(state, form).await)
         }
     }
@@ -231,7 +237,10 @@ async fn create_response(
 
 /// This gets the survey page for a specific survey so that a respondent can answer the questions
 /// and then submit them
-async fn get_survey_page(State(state): State<AppState>, Path(survey_id): Path<String>) -> Result<Response, Redirect> {
+async fn get_survey_page(
+    State(state): State<AppState>,
+    Path(survey_id): Path<String>,
+) -> Result<Response, Redirect> {
     // Get survey to check if it even exists
     //TODO optimize as get_survey_page and this is a hot path
     let result = get_survey(&state.connection, &survey_id).await;

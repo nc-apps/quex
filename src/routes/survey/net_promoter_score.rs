@@ -1,13 +1,13 @@
+use crate::auth::authenticated_user::AuthenticatedUser;
+use crate::AppState;
 use askama::Template;
 use askama_axum::IntoResponse;
 use axum::extract::{Path, State};
-use axum::Form;
 use axum::response::Redirect;
+use axum::Form;
 use libsql::named_params;
 use nanoid::nanoid;
 use serde::Deserialize;
-use crate::AppState;
-use crate::auth::authenticated_user::AuthenticatedUser;
 
 #[derive(Template)]
 #[template(path = "nps.html")]
@@ -47,12 +47,18 @@ pub(super) async fn create_response(
     Redirect::to("/thanks")
 }
 
-
-pub(super) async fn create_new_survey(State(state): State<AppState>, user: AuthenticatedUser) -> impl IntoResponse {
+pub(super) async fn create_new_survey(
+    State(state): State<AppState>,
+    user: AuthenticatedUser,
+) -> impl IntoResponse {
     let survey_id = nanoid!();
-    let result = state.connection.execute(
-        "INSERT INTO net_promoter_score_surveys (id, user_id) VALUES (:id, :user_id)",
-        named_params! {":id":survey_id.clone(), ":user_id":user.id }).await;
+    let result = state
+        .connection
+        .execute(
+            "INSERT INTO net_promoter_score_surveys (id, user_id) VALUES (:id, :user_id)",
+            named_params! {":id":survey_id.clone(), ":user_id":user.id },
+        )
+        .await;
 
     if let Err(error) = result {
         tracing::error!("Error creating new survey: {:?}", error);
@@ -64,14 +70,23 @@ pub(super) async fn create_new_survey(State(state): State<AppState>, user: Authe
     Redirect::to(format!("/surveys/nps/{}", survey_id).as_ref())
 }
 
-
 //TODO consider renaming to evaluation or something more fitting
 #[derive(Template)]
 #[template(path = "results/net promoter score.html")]
 struct NetPromoterScoreResultsTemplate {}
 
-pub(super) async fn get_results_page(State(state): State<AppState>, Path(survey_id): Path<String>, user: AuthenticatedUser) -> impl IntoResponse {
-    let result = state.connection.query("SELECT * FROM net_promoter_score_surveys WHERE user_id = :user_id AND id = :survey_id", named_params![":user_id": user.id, ":survey_id": survey_id]).await;
+pub(super) async fn get_results_page(
+    State(state): State<AppState>,
+    Path(survey_id): Path<String>,
+    user: AuthenticatedUser,
+) -> impl IntoResponse {
+    let result = state
+        .connection
+        .query(
+            "SELECT * FROM net_promoter_score_surveys WHERE user_id = :user_id AND id = :survey_id",
+            named_params![":user_id": user.id, ":survey_id": survey_id],
+        )
+        .await;
 
     let mut rows = match result {
         Ok(rows) => rows,

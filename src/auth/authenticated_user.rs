@@ -18,9 +18,9 @@ pub(crate) struct AuthenticatedUser {
 
 #[async_trait]
 impl<S> FromRequestParts<S> for AuthenticatedUser
-    where
-        AppState: FromRef<S>,
-        S: Send + Sync,
+where
+    AppState: FromRef<S>,
+    S: Send + Sync,
 {
     type Rejection = Response;
 
