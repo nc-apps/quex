@@ -8,6 +8,8 @@ use axum::Form;
 use libsql::named_params;
 use nanoid::nanoid;
 use serde::Deserialize;
+use std::sync::Arc;
+use time::OffsetDateTime;
 
 #[derive(Template)]
 #[template(path = "nps.html")]
@@ -50,13 +52,42 @@ pub(super) async fn create_response(
 pub(super) async fn create_new_survey(
     State(state): State<AppState>,
     user: AuthenticatedUser,
-) -> impl IntoResponse {
+    name: Option<String>,
+) -> Redirect {
     let survey_id = nanoid!();
+
+    let name: Arc<str> = match name.as_deref() {
+        // Use the first 6 characters of the survey id as the name if no name is provided
+        Some("") | None => format!("Net Promoter Score Survey {}", &survey_id[..7]).into(),
+        Some(name) => name.into(),
+    };
+
+    // Create timestamp
+    // We could use the database timestamp, but I prefer to have the application dictate the time in
+    // case something goes wrong
+    let now = OffsetDateTime::now_utc().unix_timestamp();
+
     let result = state
         .connection
         .execute(
-            "INSERT INTO net_promoter_score_surveys (id, user_id) VALUES (:id, :user_id)",
-            named_params! {":id":survey_id.clone(), ":user_id":user.id },
+            "INSERT INTO net_promoter_score_surveys (\
+                id,\
+                user_id,\
+                name,\
+                created_at_utc\
+                ) \
+                VALUES (\
+                    :id,\
+                    :user_id,\
+                    :name,\
+                    :created_at_utc\
+                )",
+            named_params! {
+                ":id":survey_id.clone(),
+                ":user_id":user.id,
+                ":name":name,
+                ":created_at_utc":now
+            },
         )
         .await;
 

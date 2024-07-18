@@ -1,17 +1,15 @@
 use crate::auth::authenticated_user::AuthenticatedUser;
-use crate::{routes, AppState};
+use crate::AppState;
 use askama::Template;
 use askama_axum::IntoResponse;
-use axum::body::Body;
-use axum::extract::rejection::FormRejection;
 use axum::extract::{FromRequest, Path, Request, State};
-use axum::http::request::Parts;
-use axum::http::StatusCode;
 use axum::response::{Redirect, Response};
-use axum::routing::get;
+use axum::routing::{get, post};
 use axum::{Form, Router};
 use libsql::{named_params, Connection};
+use serde::Deserialize;
 use std::sync::Arc;
+use time::OffsetDateTime;
 
 mod attrakdiff;
 mod net_promoter_score;
@@ -19,15 +17,15 @@ mod system_usability_score;
 
 pub(crate) fn create_router() -> Router<AppState> {
     let survey_routes = Router::new()
-        .route("/nps/new", get(net_promoter_score::create_new_survey))
+        .route("/nps", post(net_promoter_score::create_new_survey))
         .route("/nps/:id", get(net_promoter_score::get_results_page))
-        .route("/sus/new", get(system_usability_score::create_new_survey))
+        .route("/sus", post(system_usability_score::create_new_survey))
         .route("/sus/:id", get(system_usability_score::get_results_page))
-        .route("/ad/new", get(attrakdiff::create_new_survey))
+        .route("/ad", post(attrakdiff::create_new_survey))
         .route("/ad/:id", get(attrakdiff::get_results_page));
 
     Router::new()
-        .route("/surveys", get(surveys_page))
+        .route("/surveys", get(get_surveys_page).post(create_survey))
         .nest("/surveys", survey_routes)
         // These are the public endpoints that respondents can use to access a questionnaire
         // and submit their responses.
@@ -35,15 +33,20 @@ pub(crate) fn create_router() -> Router<AppState> {
         // 1. They don't need an account/sign in to access the survey
         // 2. They don't need a long URL to access the survey. The survey id is enough
         // Additionally the survey type is not leaked in the URL to avoid biasing the responses
-        .route("/:survey_id", get(get_survey_page).post(create_response))
+        .route("/q/:survey_id", get(get_survey_page).post(create_response))
+}
+
+struct Survey {
+    id: String,
+    name: String,
 }
 
 /// Contains vectors for each survey type with the survey ids
 #[derive(Default)]
 struct Surveys {
-    attrakdiff: Vec<String>,
-    net_promoter_score: Vec<String>,
-    system_usability_score: Vec<String>,
+    attrakdiff: Vec<Survey>,
+    net_promoter_score: Vec<Survey>,
+    system_usability_score: Vec<Survey>,
 }
 
 #[derive(Template)]
@@ -52,11 +55,12 @@ struct SurveysTemplate {
     surveys: Surveys,
 }
 
-async fn surveys_page(
+
+async fn get_surveys_page(
     user: AuthenticatedUser,
     State(app_state): State<AppState>,
 ) -> Result<askama_axum::Response, Redirect> {
-    const GET_USER_SURVEYS_QUERY: &str = "SELECT * FROM (
+    const GET_USER_SURVEYS_QUERY: &str = "SELECT type, id, name, created_at_utc FROM (
                 SELECT 'attrakdiff' as type, * FROM attrakdiff_surveys
                 UNION ALL
                 SELECT 'net promoter score' as type, * FROM net_promoter_score_surveys
@@ -85,6 +89,7 @@ async fn surveys_page(
         let result = rows.next().await;
         match result {
             Ok(Some(row)) => {
+                // Load type
                 let result: Result<String, libsql::Error> = row.get(0);
                 let survey_type = match result {
                     Ok(survey_type) => survey_type,
@@ -95,6 +100,7 @@ async fn surveys_page(
                     }
                 };
 
+                // Load id
                 let result: Result<String, libsql::Error> = row.get(1);
                 let id = match result {
                     Ok(id) => id,
@@ -105,10 +111,28 @@ async fn surveys_page(
                     }
                 };
 
+                // Load survey name
+                let result: Result<String, libsql::Error> = row.get(2);
+                let name = match result {
+                    Ok(name) => name,
+                    Err(error) => {
+                        tracing::error!("Error reading survey name: {:?}", error);
+                        //TODO display user error message it's not their fault
+                        return Err(Redirect::to("/surveys/error"));
+                    }
+                };
+
+                //TODO load created_at_utc to display date created to user
+
+                let survey = Survey {
+                    id,
+                    name,
+                };
+
                 match survey_type.as_str() {
-                    "attrakdiff" => surveys.attrakdiff.push(id),
-                    "net promoter score" => surveys.net_promoter_score.push(id),
-                    "system usability score" => surveys.system_usability_score.push(id),
+                    "attrakdiff" => surveys.attrakdiff.push(survey),
+                    "net promoter score" => surveys.net_promoter_score.push(survey),
+                    "system usability score" => surveys.system_usability_score.push(survey),
                     other => {
                         tracing::error!("Unexpected unknown survey type: {}", other);
                         return Err(Redirect::to("/surveys/error"));
@@ -138,9 +162,13 @@ const GET_SURVEY_QUERY: &str = "SELECT * FROM (
         )
             WHERE id = :survey_id";
 
-enum Survey {
+#[derive(Deserialize, Debug)]
+enum SurveyType {
+    #[serde(rename = "ad")]
     Attrakdiff,
+    #[serde(rename = "nps")]
     NetPromoterScore,
+    #[serde(rename = "sus")]
     SystemUsabilityScore,
 }
 
@@ -156,7 +184,7 @@ enum GetSurveyError {
 async fn get_survey(
     connection: &Connection,
     survey_id: &str,
-) -> Result<Option<Survey>, GetSurveyError> {
+) -> Result<Option<SurveyType>, GetSurveyError> {
     //TODO possibly optimize this as we don't know the type of the survey from the path alone,
     // but also want the path to be easy to enter for users and don't reveal information that could
     // bias the responses like the survey type
@@ -174,9 +202,9 @@ async fn get_survey(
     };
     let survey_type = row.get::<String>(0)?;
     match survey_type.as_str() {
-        "attrakdiff" => Ok(Some(Survey::Attrakdiff)),
-        "net promoter score" => Ok(Some(Survey::NetPromoterScore)),
-        "system usability score" => Ok(Some(Survey::SystemUsabilityScore)),
+        "attrakdiff" => Ok(Some(SurveyType::Attrakdiff)),
+        "net promoter score" => Ok(Some(SurveyType::NetPromoterScore)),
+        "system usability score" => Ok(Some(SurveyType::SystemUsabilityScore)),
         other => {
             tracing::error!("Unexpected unknown survey type: {}", other);
             Err(GetSurveyError::UnexpectedSurveyType(other.into()))
@@ -214,19 +242,19 @@ async fn create_response(
     // Forward survey to correct survey page response handler
     // Wrote this very late. Might not be the best code
     match survey {
-        Survey::Attrakdiff => {
+        SurveyType::Attrakdiff => {
             let form = Form::<attrakdiff::Response>::from_request(request, &state)
                 .await
                 .map_err(|error| error.into_response())?;
             Ok(attrakdiff::create_response(state, form).await)
         }
-        Survey::NetPromoterScore => {
+        SurveyType::NetPromoterScore => {
             let form = Form::<net_promoter_score::Response>::from_request(request, &state)
                 .await
                 .map_err(|error| error.into_response())?;
             Ok(net_promoter_score::create_response(state, form).await)
         }
-        Survey::SystemUsabilityScore => {
+        SurveyType::SystemUsabilityScore => {
             let form = Form::<system_usability_score::Response>::from_request(request, &state)
                 .await
                 .map_err(|error| error.into_response())?;
@@ -260,8 +288,32 @@ async fn get_survey_page(
     };
 
     Ok(match survey {
-        Survey::Attrakdiff => attrakdiff::get_page(),
-        Survey::NetPromoterScore => net_promoter_score::get_page(),
-        Survey::SystemUsabilityScore => system_usability_score::get_page(),
+        SurveyType::Attrakdiff => attrakdiff::get_page(),
+        SurveyType::NetPromoterScore => net_promoter_score::get_page(),
+        SurveyType::SystemUsabilityScore => system_usability_score::get_page(),
     })
+}
+
+#[derive(Deserialize, Debug)]
+struct CreateSurveyRequest {
+    /// The name of the survey. It is optional to reduce user friction, and we crate a random name if
+    /// it is not provided.
+    name: Option<String>,
+    r#type: SurveyType,
+}
+
+async fn create_survey(
+    state: State<AppState>,
+    user: AuthenticatedUser,
+    Form(request): Form<CreateSurveyRequest>,
+) -> Redirect {
+    match request.r#type {
+        SurveyType::Attrakdiff => attrakdiff::create_new_survey(state, user, request.name).await,
+        SurveyType::NetPromoterScore => {
+            net_promoter_score::create_new_survey(state, user, request.name).await
+        }
+        SurveyType::SystemUsabilityScore => {
+            system_usability_score::create_new_survey(state, user, request.name).await
+        }
+    }
 }

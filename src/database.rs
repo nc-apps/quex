@@ -1,5 +1,4 @@
 use libsql::{Builder, Connection, Database};
-use std::env;
 
 // Use local database for debugging
 #[cfg(debug_assertions)]

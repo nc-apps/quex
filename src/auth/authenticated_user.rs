@@ -6,7 +6,6 @@ use axum::{
 };
 use axum_extra::extract::{cookie::Cookie, CookieJar};
 use libsql::named_params;
-use reqwest::StatusCode;
 
 use crate::AppState;
 
