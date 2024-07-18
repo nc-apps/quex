@@ -1,7 +1,10 @@
+use std::sync::Arc;
 use std::{env, net::Ipv4Addr, time::Duration};
 
 use crate::auth::authenticated_user::AuthenticatedUser;
+use crate::routes::survey;
 use askama_axum::{IntoResponse, Template};
+use axum::http::StatusCode;
 use axum::{extract::State, http::Uri, response::Redirect, routing::get, Form, Router};
 use dotenv::dotenv;
 use libsql::{named_params, Builder, Connection, Database};
@@ -11,8 +14,8 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
 mod auth;
-mod email;
 mod database;
+mod email;
 mod routes;
 
 #[tokio::main]
@@ -50,18 +53,13 @@ async fn main() {
     };
 
     let auth_routes = auth::create_router();
+    let survey_routes = survey::create_router();
 
     // Build our application with a route
     let app = Router::new()
         .route("/", get(routes::index::get_page))
-        .route("/nps", get(routes::net_promoter_score::get_page).post(routes::net_promoter_score::create_response))
-        .route("/sus", get(routes::system_usability_score::get_page).post(routes::system_usability_score::create_response))
-        .route(
-            "/attrakdiff",
-            get(routes::attrakdiff::get_page).post(routes::attrakdiff::create_response),
-        )
-        .route("/surveys", get(surveys_page))
         .merge(auth_routes)
+        .merge(survey_routes)
         // If the route could not be matched it might be a file
         .fallback_service(ServeDir::new("public"))
         .with_state(app_state);
@@ -75,7 +73,6 @@ async fn main() {
     axum::serve(listener, app).await.unwrap();
 }
 
-
 #[derive(Clone)]
 pub(crate) struct Configuration {
     /// The server URL under which the server can be reached publicly for clients.
@@ -88,37 +85,6 @@ pub(crate) struct AppState {
     connection: Connection,
     client: reqwest::Client,
     configuration: Configuration,
-}
-
-
-#[derive(Template)]
-#[template(path = "surveys.html")]
-struct SurveysTemplate {
-    surveys: Vec<u32>,
-}
-
-async fn surveys_page(
-    user: AuthenticatedUser,
-    State(app_state): State<AppState>,
-) -> impl IntoResponse {
-    let mut rows = app_state
-        .connection
-        .query(
-            "SELECT id FROM system_usability_score_surveys WHERE researcher_id = :researcher_id",
-            named_params![":researcher_id": user.id],
-        )
-        .await
-        .expect("Failed to query surveys");
-
-    let mut surveys = Vec::new();
-
-    while let Ok(Some(row)) = rows.next().await {
-        let sus_survey: u32 = row.get(0).expect("Failed to get survey id");
-        surveys.push(sus_survey);
-    }
-
-    let surveys_template = SurveysTemplate { surveys };
-    surveys_template
 }
 
 /// Runs forever and cleans up expired app data about every 5 minutes
