@@ -6,27 +6,27 @@ content %}
 
 <h2>AttrakDiff</h2>
 <ul>
-    {% for survey_id in surveys.attrakdiff %}
+    {% for survey in surveys.attrakdiff %}
     <li>
-        <a href="/surveys/ad/{{ survey_id }}">AD Survey {{ survey_id }}</a>
+        <a href="/surveys/ad/{{ survey.id }}">AD Survey {{ survey.name }}</a>
     </li>
     {% endfor %}
 </ul>
 
 <h2>Net Promoter Score</h2>
 <ul>
-    {% for survey_id in surveys.net_promoter_score %}
+    {% for survey in surveys.net_promoter_score %}
     <li>
-        <a href="/surveys/nps/{{ survey_id }}">NPS Survey {{ survey_id }}</a>
+        <a href="/surveys/nps/{{ survey.id }}">{{ survey.name }}</a>
     </li>
     {% endfor %}
 </ul>
 
 <h2>System Usability Score</h2>
 <ul>
-    {% for survey_id in surveys.system_usability_score %}
+    {% for survey in surveys.system_usability_score %}
     <li>
-        <a href="/surveys/sus/{{ survey_id }}">SUS Survey {{ survey_id }}</a>
+        <a href="/surveys/sus/{{ survey.id }}">{{ survey.name }}</a>
     </li>
     {% endfor %}
 </ul>

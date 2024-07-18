@@ -9,6 +9,7 @@ use axum::{Form, Router};
 use libsql::{named_params, Connection};
 use serde::Deserialize;
 use std::sync::Arc;
+use time::OffsetDateTime;
 
 mod attrakdiff;
 mod net_promoter_score;
@@ -24,7 +25,7 @@ pub(crate) fn create_router() -> Router<AppState> {
         .route("/ad/:id", get(attrakdiff::get_results_page));
 
     Router::new()
-        .route("/surveys", get(surveys_page).post(create_survey))
+        .route("/surveys", get(get_surveys_page).post(create_survey))
         .nest("/surveys", survey_routes)
         // These are the public endpoints that respondents can use to access a questionnaire
         // and submit their responses.
@@ -35,12 +36,17 @@ pub(crate) fn create_router() -> Router<AppState> {
         .route("/q/:survey_id", get(get_survey_page).post(create_response))
 }
 
+struct Survey {
+    id: String,
+    name: String,
+}
+
 /// Contains vectors for each survey type with the survey ids
 #[derive(Default)]
 struct Surveys {
-    attrakdiff: Vec<String>,
-    net_promoter_score: Vec<String>,
-    system_usability_score: Vec<String>,
+    attrakdiff: Vec<Survey>,
+    net_promoter_score: Vec<Survey>,
+    system_usability_score: Vec<Survey>,
 }
 
 #[derive(Template)]
@@ -49,11 +55,12 @@ struct SurveysTemplate {
     surveys: Surveys,
 }
 
-async fn surveys_page(
+
+async fn get_surveys_page(
     user: AuthenticatedUser,
     State(app_state): State<AppState>,
 ) -> Result<askama_axum::Response, Redirect> {
-    const GET_USER_SURVEYS_QUERY: &str = "SELECT * FROM (
+    const GET_USER_SURVEYS_QUERY: &str = "SELECT type, id, name, created_at_utc FROM (
                 SELECT 'attrakdiff' as type, * FROM attrakdiff_surveys
                 UNION ALL
                 SELECT 'net promoter score' as type, * FROM net_promoter_score_surveys
@@ -82,6 +89,7 @@ async fn surveys_page(
         let result = rows.next().await;
         match result {
             Ok(Some(row)) => {
+                // Load type
                 let result: Result<String, libsql::Error> = row.get(0);
                 let survey_type = match result {
                     Ok(survey_type) => survey_type,
@@ -92,6 +100,7 @@ async fn surveys_page(
                     }
                 };
 
+                // Load id
                 let result: Result<String, libsql::Error> = row.get(1);
                 let id = match result {
                     Ok(id) => id,
@@ -102,10 +111,28 @@ async fn surveys_page(
                     }
                 };
 
+                // Load survey name
+                let result: Result<String, libsql::Error> = row.get(2);
+                let name = match result {
+                    Ok(name) => name,
+                    Err(error) => {
+                        tracing::error!("Error reading survey name: {:?}", error);
+                        //TODO display user error message it's not their fault
+                        return Err(Redirect::to("/surveys/error"));
+                    }
+                };
+
+                //TODO load created_at_utc to display date created to user
+
+                let survey = Survey {
+                    id,
+                    name,
+                };
+
                 match survey_type.as_str() {
-                    "attrakdiff" => surveys.attrakdiff.push(id),
-                    "net promoter score" => surveys.net_promoter_score.push(id),
-                    "system usability score" => surveys.system_usability_score.push(id),
+                    "attrakdiff" => surveys.attrakdiff.push(survey),
+                    "net promoter score" => surveys.net_promoter_score.push(survey),
+                    "system usability score" => surveys.system_usability_score.push(survey),
                     other => {
                         tracing::error!("Unexpected unknown survey type: {}", other);
                         return Err(Redirect::to("/surveys/error"));
