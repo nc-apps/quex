@@ -152,14 +152,18 @@ pub(super) async fn create_new_survey(
 //TODO consider renaming to evaluation or something more fitting
 #[derive(Template)]
 #[template(path = "results/system usability score.html")]
-struct SystemUsabilityScoreResultsTemplate {}
+struct SystemUsabilityScoreResultsTemplate {
+    id: String,
+}
 
 pub(super) async fn get_results_page(
     State(state): State<AppState>,
     Path(survey_id): Path<String>,
     user: AuthenticatedUser,
 ) -> impl IntoResponse {
-    let result = state.connection.query("SELECT * FROM system_usability_score_surveys WHERE user_id = :user_id AND id = :survey_id", named_params![":user_id": user.id, ":survey_id": survey_id]).await;
+    let result = state.connection.query(
+        "SELECT * FROM system_usability_score_surveys WHERE user_id = :user_id AND id = :survey_id",
+        named_params![":user_id": user.id, ":survey_id": survey_id.clone()]).await;
 
     let mut rows = match result {
         Ok(rows) => rows,
@@ -187,5 +191,5 @@ pub(super) async fn get_results_page(
         }
     };
 
-    SystemUsabilityScoreResultsTemplate {}.into_response()
+    SystemUsabilityScoreResultsTemplate { id: survey_id }.into_response()
 }

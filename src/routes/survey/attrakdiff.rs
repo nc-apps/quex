@@ -280,7 +280,9 @@ pub(super) async fn create_new_survey(
 //TODO consider renaming to evaluation or something more fitting
 #[derive(Template)]
 #[template(path = "results/attrakdiff.html")]
-struct AttrakdiffResultsTemplate {}
+struct AttrakdiffResultsTemplate {
+    id: String,
+}
 
 pub(super) async fn get_results_page(
     State(state): State<AppState>,
@@ -291,7 +293,7 @@ pub(super) async fn get_results_page(
         .connection
         .query(
             "SELECT * FROM attrakdiff_surveys WHERE user_id = :user_id AND id = :survey_id",
-            named_params![":user_id": user.id, ":survey_id": survey_id],
+            named_params![":user_id": user.id, ":survey_id": survey_id.clone()],
         )
         .await;
 
@@ -318,5 +320,5 @@ pub(super) async fn get_results_page(
         }
     };
 
-    AttrakdiffResultsTemplate {}.into_response()
+    AttrakdiffResultsTemplate { id: survey_id }.into_response()
 }
