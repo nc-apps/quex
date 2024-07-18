@@ -9,6 +9,7 @@ content %}
     {% for survey in surveys.attrakdiff %}
     <li>
         <a href="/surveys/ad/{{ survey.id }}">AD Survey {{ survey.name }}</a>
+        <button onclick="copyLink('{{ survey.id }}')">Copy Link</button>
     </li>
     {% endfor %}
 </ul>
@@ -18,6 +19,7 @@ content %}
     {% for survey in surveys.net_promoter_score %}
     <li>
         <a href="/surveys/nps/{{ survey.id }}">{{ survey.name }}</a>
+        <button onclick="copyLink('{{ survey.id }}')">Copy Link</button>
     </li>
     {% endfor %}
 </ul>
@@ -27,6 +29,7 @@ content %}
     {% for survey in surveys.system_usability_score %}
     <li>
         <a href="/surveys/sus/{{ survey.id }}">{{ survey.name }}</a>
+        <button onclick="copyLink('{{ survey.id }}')">Copy Link</button>
     </li>
     {% endfor %}
 </ul>
@@ -49,5 +52,7 @@ content %}
     </fieldset>
     <button type="submit" class="block">Submit</button>
 </form>
+
+<script src="/copyLink.js"></script>
 
 {% call super() %} {% endblock %}
