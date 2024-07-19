@@ -13,10 +13,14 @@ use time::OffsetDateTime;
 
 #[derive(Template)]
 #[template(path = "sus.html")]
-struct SusTemplate {}
+struct SusTemplate {
+    id: String,
+}
 
-pub(super) fn get_page() -> askama_axum::Response {
-    let sus_template = SusTemplate {};
+pub(super) fn get_page(id: String) -> askama_axum::Response {
+    let sus_template = SusTemplate {
+        id
+    };
 
     sus_template.into_response()
 }
@@ -48,13 +52,17 @@ pub(super) struct Response {
 pub(super) async fn create_response(
     State(app_state): State<AppState>,
     Form(sus_answers): Form<Response>,
+    survey_id: String,
 ) -> Redirect {
     tracing::debug!("Answers for SUS: {:?}", sus_answers);
+    let response_id = nanoid!();
 
     app_state
         .connection
         .execute(
             "INSERT INTO system_usability_score_responses (
+                id,
+                survey_id,
                 answer_1,
                 answer_2,
                 answer_3,
@@ -75,8 +83,12 @@ pub(super) async fn create_response(
                 ?7,
                 ?8,
                 ?9,
-                ?10)",
+                ?10,
+                ?11,
+                ?12)",
             libsql::params![
+                response_id,
+                survey_id,
                 sus_answers.q1,
                 sus_answers.q2,
                 sus_answers.q3,
@@ -97,6 +109,7 @@ pub(super) async fn create_response(
     Redirect::to("/thanks")
 }
 
+/// Handler that creates a new System Usability Score survey from a create survey form submission
 pub(super) async fn create_new_survey(
     State(state): State<AppState>,
     user: AuthenticatedUser,
@@ -150,6 +163,7 @@ pub(super) async fn create_new_survey(
 }
 
 //TODO consider renaming to evaluation or something more fitting
+/// The HTML template for the System Usability Score survey details and results page
 #[derive(Template)]
 #[template(path = "results/system usability score.html")]
 struct SystemUsabilityScoreResultsTemplate {
@@ -158,6 +172,7 @@ struct SystemUsabilityScoreResultsTemplate {
     answers: Vec<[i32; 10]>,
 }
 
+/// Gets the details page that displays the results of the survey and gives insights to the responses
 pub(super) async fn get_results_page(
     State(state): State<AppState>,
     Path(survey_id): Path<String>,
@@ -203,6 +218,27 @@ pub(super) async fn get_results_page(
         }
     };
 
+    // Read results
+    let result = state
+        .connection
+        .query(
+            "SELECT * FROM system_usability_score_responses WHERE survey_id = :survey_id",
+            named_params![":survey_id": survey_id.clone()],
+        )
+        .await;
+
+    let mut rows = match result {
+        Ok(rows) => rows,
+        Err(error) => {
+            tracing::error!(
+                "Error querying for System Usability Score responses: {:?}",
+                error
+            );
+            //TODO display user error message it's not their fault
+            return Redirect::to("/surveys").into_response();
+        }
+    };
+
     let mut answers = Vec::new();
 
     loop {
@@ -210,12 +246,12 @@ pub(super) async fn get_results_page(
         match result {
             Ok(Some(row)) => {
                 let mut response = [0; 10];
-                for i in 0usize..=10 {
+                for i in 0usize..10 {
                     let answer = row.get::<i32>((i + 2).try_into().unwrap());
                     let answer = match answer {
                         Ok(answer) => answer,
                         Err(error) => {
-                            tracing::error!("Error reading survey id: {:?}", error);
+                            tracing::error!("Error reading response number {i}: {error:?}");
                             //TODO display user error message it's not their fault
                             return Redirect::to("/surveys").into_response();
                         }
@@ -232,10 +268,11 @@ pub(super) async fn get_results_page(
             }
         }
     }
+
     SystemUsabilityScoreResultsTemplate {
         id: survey_id,
         name,
         answers,
     }
-    .into_response()
+        .into_response()
 }

@@ -13,10 +13,14 @@ use time::OffsetDateTime;
 
 #[derive(Template)]
 #[template(path = "nps.html")]
-struct NpsTemplate {}
+struct NpsTemplate {
+    id: String,
+}
 
-pub(super) fn get_page() -> askama_axum::Response {
-    let nps_template = NpsTemplate {};
+pub(super) fn get_page(id: String) -> askama_axum::Response {
+    let nps_template = NpsTemplate {
+        id
+    };
 
     nps_template.into_response()
 }
@@ -26,20 +30,27 @@ pub(super) struct Response {
     #[serde(rename = "Q1")]
     q1: u8,
     #[serde(rename = "Q2")]
-    q2: String,
+    q2: Option<String>,
 }
 
 pub(super) async fn create_response(
     State(app_state): State<AppState>,
     Form(nps_answers): Form<Response>,
+    survey_id: String,
 ) -> Redirect {
     tracing::debug!("Answers for NPS: {:?}", nps_answers);
+    let response_id = nanoid!();
 
     app_state
         .connection
         .execute(
-            "INSERT INTO net_promoter_score_responses (answer_1, answer_2) VALUES (?1, ?2)",
-            libsql::params![nps_answers.q1, nps_answers.q2],
+            "INSERT INTO net_promoter_score_responses (id, survey_id, answer_1, answer_2) VALUES (:id, :survey_id, :answer_1, :answer_2)",
+            libsql::named_params! {
+                ":id": response_id,
+                ":survey_id": survey_id,
+                ":answer_1": nps_answers.q1,
+                ":answer_2": nps_answers.q2,
+            },
         )
         .await
         .expect("Failed to insert into database");
@@ -49,6 +60,7 @@ pub(super) async fn create_response(
     Redirect::to("/thanks")
 }
 
+/// Handler that creates a new Net Promoter Score survey from a create survey form submission
 pub(super) async fn create_new_survey(
     State(state): State<AppState>,
     user: AuthenticatedUser,
@@ -102,6 +114,7 @@ pub(super) async fn create_new_survey(
 }
 
 //TODO consider renaming to evaluation or something more fitting
+/// The HTML template for the Net Promoter Score survey details and results page
 #[derive(Template)]
 #[template(path = "results/net promoter score.html")]
 struct NetPromoterScoreResultsTemplate {
@@ -110,6 +123,7 @@ struct NetPromoterScoreResultsTemplate {
     answers: Vec<(i32, String)>,
 }
 
+/// Gets the details page that displays the results of the survey and gives insights to the responses
 pub(super) async fn get_results_page(
     State(state): State<AppState>,
     Path(survey_id): Path<String>,
@@ -156,6 +170,7 @@ pub(super) async fn get_results_page(
         }
     };
 
+    // Read results
     let result = state
         .connection
         .query(
@@ -218,5 +233,5 @@ pub(super) async fn get_results_page(
         name,
         answers,
     }
-    .into_response()
+        .into_response()
 }

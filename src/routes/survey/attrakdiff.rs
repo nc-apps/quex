@@ -15,12 +15,14 @@ use time::OffsetDateTime;
 #[derive(Template)]
 #[template(path = "attrakdiff.html")]
 struct AttrakDiffTemplate {
+    id: String,
     questions: Vec<(String, String)>,
 }
 
 /// Handler for the AttrakDiff survey page
-pub(super) fn get_page() -> askama_axum::Response {
+pub(super) fn get_page(id: String) -> askama_axum::Response {
     let attrakdiff_template = AttrakDiffTemplate {
+        id,
         questions: vec![
             ("Human".to_string(), "Technical".to_string()),
             ("Isolating".to_string(), "Connective".to_string()),
@@ -123,14 +125,18 @@ pub(super) struct Response {
 pub(super) async fn create_response(
     State(app_state): State<AppState>,
     Form(attrakdiff_answers): Form<Response>,
+    survey_id: String,
 ) -> Redirect {
     tracing::debug!("Answers for AttrakDiff: {:?}", attrakdiff_answers);
+    let response_id = nanoid!();
 
     app_state
         .connection
         .execute(
             // insert answers 1 to 28 into database
             "INSERT INTO attrakdiff_responses (
+                id,
+                survey_id,
                 answer_1,
                 answer_2,
                 answer_3,
@@ -187,9 +193,13 @@ pub(super) async fn create_response(
                 ?25,
                 ?26,
                 ?27,
-                ?28
+                ?28,
+                ?29,
+                ?30
             )",
             libsql::params![
+                response_id,
+                survey_id,
                 attrakdiff_answers.q1,
                 attrakdiff_answers.q2,
                 attrakdiff_answers.q3,
@@ -228,6 +238,7 @@ pub(super) async fn create_response(
     Redirect::to("/thanks")
 }
 
+/// Handler that creates a new AttrakDiff survey from a create survey form submission
 pub(super) async fn create_new_survey(
     State(state): State<AppState>,
     user: AuthenticatedUser,
@@ -280,7 +291,9 @@ pub(super) async fn create_new_survey(
     Redirect::to(format!("/surveys/ad/{}", survey_id).as_ref())
 }
 
+
 //TODO consider renaming to evaluation or something more fitting
+/// The HTML template for the AttrakDiff survey details and results page
 #[derive(Template)]
 #[template(path = "results/attrakdiff.html")]
 struct AttrakdiffResultsTemplate {
@@ -289,6 +302,7 @@ struct AttrakdiffResultsTemplate {
     answers: Vec<[i32; 28]>,
 }
 
+/// Gets the details page that displays the results of the survey and gives insights to the responses
 pub(super) async fn get_results_page(
     State(state): State<AppState>,
     Path(survey_id): Path<String>,
@@ -335,6 +349,27 @@ pub(super) async fn get_results_page(
         }
     };
 
+    // Read results
+    let result = state
+        .connection
+        .query(
+            "SELECT * FROM attrakdiff_responses WHERE survey_id = :survey_id",
+            named_params![":survey_id": survey_id.clone()],
+        )
+        .await;
+
+    let mut rows = match result {
+        Ok(rows) => rows,
+        Err(error) => {
+            tracing::error!(
+                "Error querying for AttrakDiff responses: {:?}",
+                error
+            );
+            //TODO display user error message it's not their fault
+            return Redirect::to("/surveys").into_response();
+        }
+    };
+
     let mut answers = Vec::new();
 
     loop {
@@ -342,12 +377,12 @@ pub(super) async fn get_results_page(
         match result {
             Ok(Some(row)) => {
                 let mut response = [0; 28];
-                for i in 0usize..=28 {
+                for i in 0usize..28 {
                     let answer = row.get::<i32>((i + 2).try_into().unwrap());
                     let answer = match answer {
                         Ok(answer) => answer,
                         Err(error) => {
-                            tracing::error!("Error reading survey id: {:?}", error);
+                            tracing::error!("Error reading answer number {i}: {error:?}");
                             //TODO display user error message it's not their fault
                             return Redirect::to("/surveys").into_response();
                         }
@@ -365,10 +400,11 @@ pub(super) async fn get_results_page(
         }
     }
 
+
     AttrakdiffResultsTemplate {
         id: survey_id,
         name,
         answers,
     }
-    .into_response()
+        .into_response()
 }
