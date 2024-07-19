@@ -285,6 +285,8 @@ pub(super) async fn create_new_survey(
 #[template(path = "results/attrakdiff.html")]
 struct AttrakdiffResultsTemplate {
     id: String,
+    name: String,
+    answers: Vec<[i32; 28]>,
 }
 
 pub(super) async fn get_results_page(
@@ -295,7 +297,7 @@ pub(super) async fn get_results_page(
     let result = state
         .connection
         .query(
-            "SELECT * FROM attrakdiff_surveys WHERE user_id = :user_id AND id = :survey_id",
+            "SELECT name FROM attrakdiff_surveys WHERE user_id = :user_id AND id = :survey_id",
             named_params![":user_id": user.id, ":survey_id": survey_id.clone()],
         )
         .await;
@@ -311,7 +313,7 @@ pub(super) async fn get_results_page(
 
     let result = rows.next().await;
     //TODO put data we want to display into template
-    let _row = match result {
+    let row = match result {
         Ok(Some(row)) => row,
         // Survey not found. It wasn't created (yet), or deleted
         //TODO display user error message
@@ -323,5 +325,50 @@ pub(super) async fn get_results_page(
         }
     };
 
-    AttrakdiffResultsTemplate { id: survey_id }.into_response()
+    let survey_name_result = row.get::<String>(0);
+    let name = match survey_name_result {
+        Ok(name) => name,
+        Err(error) => {
+            tracing::error!("Error reading survey name: {:?}", error);
+            //TODO display user error message it's not their fault
+            return Redirect::to("/surveys").into_response();
+        }
+    };
+
+    let mut answers = Vec::new();
+
+    loop {
+        let result = rows.next().await;
+        match result {
+            Ok(Some(row)) => {
+                let mut response = [0; 28];
+                for i in 0usize..=28 {
+                    let answer = row.get::<i32>((i + 2).try_into().unwrap());
+                    let answer = match answer {
+                        Ok(answer) => answer,
+                        Err(error) => {
+                            tracing::error!("Error reading survey id: {:?}", error);
+                            //TODO display user error message it's not their fault
+                            return Redirect::to("/surveys").into_response();
+                        }
+                    };
+                    response[i] = answer;
+                }
+                answers.push(response);
+            }
+            Ok(None) => break,
+            Err(error) => {
+                tracing::error!("Error reading query result: {:?}", error);
+                //TODO display user error message it's not their fault
+                return Redirect::to("/surveys").into_response();
+            }
+        }
+    }
+
+    AttrakdiffResultsTemplate {
+        id: survey_id,
+        name,
+        answers,
+    }
+    .into_response()
 }

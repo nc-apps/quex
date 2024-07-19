@@ -106,6 +106,8 @@ pub(super) async fn create_new_survey(
 #[template(path = "results/net promoter score.html")]
 struct NetPromoterScoreResultsTemplate {
     id: String,
+    name: String,
+    answers: Vec<(i32, String)>,
 }
 
 pub(super) async fn get_results_page(
@@ -116,7 +118,7 @@ pub(super) async fn get_results_page(
     let result = state
         .connection
         .query(
-            "SELECT * FROM net_promoter_score_surveys WHERE user_id = :user_id AND id = :survey_id",
+            "SELECT name FROM net_promoter_score_surveys WHERE user_id = :user_id AND id = :survey_id",
             named_params![":user_id": user.id, ":survey_id": survey_id.clone()],
         )
         .await;
@@ -132,7 +134,7 @@ pub(super) async fn get_results_page(
 
     let result = rows.next().await;
     //TODO put data we want to display into template
-    let _row = match result {
+    let row = match result {
         Ok(Some(row)) => row,
         // Survey not found. It wasn't created (yet), or deleted
         //TODO display user error message
@@ -144,5 +146,77 @@ pub(super) async fn get_results_page(
         }
     };
 
-    NetPromoterScoreResultsTemplate { id: survey_id }.into_response()
+    let survey_name_result = row.get::<String>(0);
+    let name = match survey_name_result {
+        Ok(name) => name,
+        Err(error) => {
+            tracing::error!("Error reading survey name: {:?}", error);
+            //TODO display user error message it's not their fault
+            return Redirect::to("/surveys").into_response();
+        }
+    };
+
+    let result = state
+        .connection
+        .query(
+            "SELECT * FROM net_promoter_score_responses WHERE survey_id = :survey_id",
+            named_params![":survey_id": survey_id.clone()],
+        )
+        .await;
+
+    let mut rows = match result {
+        Ok(rows) => rows,
+        Err(error) => {
+            tracing::error!(
+                "Error querying for Net Promoter Score responses: {:?}",
+                error
+            );
+            //TODO display user error message it's not their fault
+            return Redirect::to("/surveys").into_response();
+        }
+    };
+
+    let mut answers: Vec<(i32, String)> = Vec::new();
+
+    loop {
+        let result = rows.next().await;
+        match result {
+            Ok(Some(row)) => {
+                let answer_1 = row.get::<i32>(2);
+                let answer_1 = match answer_1 {
+                    Ok(answer_1) => answer_1,
+                    Err(error) => {
+                        tracing::error!("Error reading survey id: {:?}", error);
+                        //TODO display user error message it's not their fault
+                        return Redirect::to("/surveys").into_response();
+                    }
+                };
+
+                let answer_2 = row.get::<String>(3);
+                let answer_2 = match answer_2 {
+                    Ok(answer_2) => answer_2,
+                    Err(error) => {
+                        tracing::error!("Error reading survey id: {:?}", error);
+                        //TODO display user error message it's not their fault
+                        return Redirect::to("/surveys").into_response();
+                    }
+                };
+
+                answers.push((answer_1, answer_2));
+            }
+            Ok(None) => break,
+            Err(error) => {
+                tracing::error!("Error reading query result: {:?}", error);
+                //TODO display user error message it's not their fault
+                return Redirect::to("/surveys").into_response();
+            }
+        }
+    }
+
+    NetPromoterScoreResultsTemplate {
+        id: survey_id,
+        name,
+        answers,
+    }
+    .into_response()
 }
