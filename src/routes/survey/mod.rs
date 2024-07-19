@@ -15,6 +15,9 @@ mod attrakdiff;
 mod net_promoter_score;
 mod system_usability_score;
 
+/// Creates a router for the surveys sub-routes.
+/// This enables us to only expose the router creation and don't need to expose the individual
+/// routes and their handlers to the rest of the application.
 pub(crate) fn create_router() -> Router<AppState> {
     let survey_routes = Router::new()
         .route("/nps", post(net_promoter_score::create_new_survey))
@@ -33,9 +36,12 @@ pub(crate) fn create_router() -> Router<AppState> {
         // 1. They don't need an account/sign in to access the survey
         // 2. They don't need a long URL to access the survey. The survey id is enough
         // Additionally the survey type is not leaked in the URL to avoid biasing the responses
+        // The /q/ is necessary as it would otherwise catch all requests that to files that the router
+        // doesn't know about. It would lead to CSS and JS not being served
         .route("/q/:survey_id", get(get_survey_page).post(create_response))
 }
 
+/// Represents a survey in the surveys overview page and list.
 struct Survey {
     id: String,
     name: String,
@@ -49,13 +55,14 @@ struct Surveys {
     system_usability_score: Vec<Survey>,
 }
 
+/// The HTML template for the surveys overview page
 #[derive(Template)]
 #[template(path = "surveys.html")]
 struct SurveysTemplate {
     surveys: Surveys,
 }
 
-
+/// Handler for the surveys overview page. Loads all surveys for the user and displays them.
 async fn get_surveys_page(
     user: AuthenticatedUser,
     State(app_state): State<AppState>,
@@ -153,6 +160,7 @@ async fn get_surveys_page(
     Ok(surveys_template.into_response())
 }
 
+/// SQL query to get a single survey from the database by id
 const GET_SURVEY_QUERY: &str = "SELECT * FROM (
             SELECT 'attrakdiff' as type, * FROM attrakdiff_surveys
             UNION ALL
@@ -162,6 +170,7 @@ const GET_SURVEY_QUERY: &str = "SELECT * FROM (
         )
             WHERE id = :survey_id";
 
+/// Survey type for a get/create surveys and create responses to a survey
 #[derive(Deserialize, Debug)]
 enum SurveyType {
     #[serde(rename = "ad")]
@@ -263,8 +272,7 @@ async fn create_response(
     }
 }
 
-/// This gets the survey page for a specific survey so that a respondent can answer the questions
-/// and then submit them
+/// Handler to get the form page for a specific survey for respondents to submit their responses
 async fn get_survey_page(
     State(state): State<AppState>,
     Path(survey_id): Path<String>,

@@ -11,12 +11,14 @@ use serde::Deserialize;
 use std::sync::Arc;
 use time::OffsetDateTime;
 
+/// The HTML template for the AttrakDiff survey
 #[derive(Template)]
 #[template(path = "attrakdiff.html")]
 struct AttrakDiffTemplate {
     questions: Vec<(String, String)>,
 }
 
+/// Handler for the AttrakDiff survey page
 pub(super) fn get_page() -> askama_axum::Response {
     let attrakdiff_template = AttrakDiffTemplate {
         questions: vec![
@@ -117,6 +119,7 @@ pub(super) struct Response {
     q28: u8,
 }
 
+/// Handler that creates a response from an attrakdiff survey response
 pub(super) async fn create_response(
     State(app_state): State<AppState>,
     Form(attrakdiff_answers): Form<Response>,
