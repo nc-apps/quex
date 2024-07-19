@@ -38,6 +38,7 @@ pub(crate) fn create_router() -> Router<AppState> {
         // Additionally the survey type is not leaked in the URL to avoid biasing the responses
         // The /q/ is necessary as it would otherwise catch all requests that to files that the router
         // doesn't know about. It would lead to CSS and JS not being served
+        .route("/thanks", get(thanks))
         .route("/q/:survey_id", get(get_survey_page).post(create_response))
 }
 
@@ -255,19 +256,19 @@ async fn create_response(
             let form = Form::<attrakdiff::Response>::from_request(request, &state)
                 .await
                 .map_err(|error| error.into_response())?;
-            Ok(attrakdiff::create_response(state, form).await)
+            Ok(attrakdiff::create_response(state, form, survey_id).await)
         }
         SurveyType::NetPromoterScore => {
             let form = Form::<net_promoter_score::Response>::from_request(request, &state)
                 .await
                 .map_err(|error| error.into_response())?;
-            Ok(net_promoter_score::create_response(state, form).await)
+            Ok(net_promoter_score::create_response(state, form, survey_id).await)
         }
         SurveyType::SystemUsabilityScore => {
             let form = Form::<system_usability_score::Response>::from_request(request, &state)
                 .await
                 .map_err(|error| error.into_response())?;
-            Ok(system_usability_score::create_response(state, form).await)
+            Ok(system_usability_score::create_response(state, form, survey_id).await)
         }
     }
 }
@@ -296,9 +297,9 @@ async fn get_survey_page(
     };
 
     Ok(match survey {
-        SurveyType::Attrakdiff => attrakdiff::get_page(),
-        SurveyType::NetPromoterScore => net_promoter_score::get_page(),
-        SurveyType::SystemUsabilityScore => system_usability_score::get_page(),
+        SurveyType::Attrakdiff => attrakdiff::get_page(survey_id),
+        SurveyType::NetPromoterScore => net_promoter_score::get_page(survey_id),
+        SurveyType::SystemUsabilityScore => system_usability_score::get_page(survey_id),
     })
 }
 
@@ -324,4 +325,14 @@ async fn create_survey(
             system_usability_score::create_new_survey(state, user, request.name).await
         }
     }
+}
+
+
+#[derive(Template)]
+#[template(path = "thanks.html")]
+struct ThanksTemplate {}
+
+
+async fn thanks() -> impl IntoResponse {
+    ThanksTemplate {}.into_response()
 }

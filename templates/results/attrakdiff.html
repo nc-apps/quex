@@ -8,50 +8,50 @@
 </head>
 
 <body>
-    <hgroup>
-        <h1>{{ name }}</h1>
-        <p>Attrakdiff | Survey ID: {{ id }}</p>
-    </hgroup>
-    <button onclick="copyLink('{{ id }}')">Copy Link</button>
-    <table>
-        {% for answers in answers %}
-        <tr>
-            <td>Human - Technical</td>
-            <td>Isolating - Connective</td>
-            <td>Pleasant - Unpleasant</td>
-            <td>Inventive - Conventional</td>
-            <td>Simple - Complicated</td>
-            <td>Professional - Unprofessional</td>
-            <td>Ugly - Attractive</td>
-            <td>Practical - Impractical</td>
-            <td>Likable - Disagreeable</td>
-            <td>Cumbersome - Straightforward</td>
-            <td>Stylish - Tacky</td>
-            <td>Predictable - Unpredictable</td>
-            <td>Cheap - Premium</td>
-            <td>Alienating - Integrating</td>
-            <td>Brings me closer to people - Separates me from people</td>
-            <td>Unpresentable - Respondents</td>
-            <td>Rejecting - Inviting</td>
-            <td>Unimaginative - Creative</td>
-            <td>Good - Bad</td>
-            <td>Confusing - Clearly structured</td>
-            <td>Repelling - Appealing</td>
-            <td>Bold - Cautious</td>
-            <td>Innovative - Conservative</td>
-            <td>Dull - Captivating</td>
-            <td>Undemanding - Challenging</td>
-            <td>Motivating - Discouraging</td>
-            <td>Novel - Ordinary</td>
-            <td>Unruly - Manageable</td>
-        </tr>
-        <tr>
-            {% for i in 0..28 %}
-            <td>{{ answers[i] }}</td>
-            {% endfor %}
-        </tr>
+<hgroup>
+    <h1>{{ name }}</h1>
+    <p>Attrakdiff | Survey ID: {{ id }}</p>
+</hgroup>
+<button onclick="copyLink('{{ id }}')">Copy Link</button>
+<table>
+    {% for answer in answers %}
+    <tr>
+        <td>Human - Technical</td>
+        <td>Isolating - Connective</td>
+        <td>Pleasant - Unpleasant</td>
+        <td>Inventive - Conventional</td>
+        <td>Simple - Complicated</td>
+        <td>Professional - Unprofessional</td>
+        <td>Ugly - Attractive</td>
+        <td>Practical - Impractical</td>
+        <td>Likable - Disagreeable</td>
+        <td>Cumbersome - Straightforward</td>
+        <td>Stylish - Tacky</td>
+        <td>Predictable - Unpredictable</td>
+        <td>Cheap - Premium</td>
+        <td>Alienating - Integrating</td>
+        <td>Brings me closer to people - Separates me from people</td>
+        <td>Unpresentable - Respondents</td>
+        <td>Rejecting - Inviting</td>
+        <td>Unimaginative - Creative</td>
+        <td>Good - Bad</td>
+        <td>Confusing - Clearly structured</td>
+        <td>Repelling - Appealing</td>
+        <td>Bold - Cautious</td>
+        <td>Innovative - Conservative</td>
+        <td>Dull - Captivating</td>
+        <td>Undemanding - Challenging</td>
+        <td>Motivating - Discouraging</td>
+        <td>Novel - Ordinary</td>
+        <td>Unruly - Manageable</td>
+    </tr>
+    <tr>
+        {% for i in 0..28 %}
+        <td>{{ answer[i] }}</td>
         {% endfor %}
-    </table>
+    </tr>
+    {% endfor %}
+</table>
 </body>
 
 </html>
