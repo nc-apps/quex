@@ -107,19 +107,6 @@ Surveys{% endblock %} {% block content %}
     My Surveys
 </h1>
 
-<h2 class="mt-3 text-xl font-semibold leading-6 text-gray-900">AttrakDiff</h2>
-{% call surveys_list(surveys.attrakdiff, "/surveys/ad/") %}
-
-<h2 class="mt-3 text-xl font-semibold leading-6 text-gray-900">
-    Net Promoter Score
-</h2>
-{% call surveys_list(surveys.net_promoter_score, "/surveys/nps/") %}
-
-<h2 class="mt-3 text-xl font-semibold leading-6 text-gray-900">
-    System Usability Score
-</h2>
-{% call surveys_list(surveys.system_usability_score, "/surveys/sus/") %}
-
 <h2 class="mt-3 text-xl font-semibold leading-6 text-gray-900">
     Create New Survey
 </h2>
@@ -141,6 +128,19 @@ Surveys{% endblock %} {% block content %}
     </fieldset>
     <button type="submit" class="block">Submit</button>
 </form>
+
+<h2 class="mt-3 text-xl font-semibold leading-6 text-gray-900">AttrakDiff</h2>
+{% call surveys_list(surveys.attrakdiff, "/surveys/ad/") %}
+
+<h2 class="mt-3 text-xl font-semibold leading-6 text-gray-900">
+    Net Promoter Score
+</h2>
+{% call surveys_list(surveys.net_promoter_score, "/surveys/nps/") %}
+
+<h2 class="mt-3 text-xl font-semibold leading-6 text-gray-900">
+    System Usability Score
+</h2>
+{% call surveys_list(surveys.system_usability_score, "/surveys/sus/") %}
 
 <script src="/copyLink.js"></script>
 
