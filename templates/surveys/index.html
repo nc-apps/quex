@@ -44,8 +44,12 @@ https://tailwindui.com/components/application-ui/lists/stacked-lists#component-a
     </li>
     {% endfor %}
 </ul>
-{% endmacro surveys_list %} {% extends "layout.html" %} {% block title %}My
-Surveys{% endblock %} {% block content %}
+{% endmacro surveys_list %}
+{% extends "layout.html" %}
+{% block title %}My
+Surveys
+{% endblock %}
+{% block content %}
 
 <nav class="flex" aria-label="Breadcrumb">
     <ol role="list" class="flex items-center space-x-4">
@@ -102,6 +106,5 @@ Surveys{% endblock %} {% block content %}
 </h2>
 {% call surveys_list(surveys.system_usability_score, "/surveys/sus/") %}
 
-<script src="/copyLink.js"></script>
 
 {% call super() %} {% endblock %}

@@ -1,4 +1,5 @@
 use crate::auth::authenticated_user::AuthenticatedUser;
+use crate::routes::create_share_link;
 use crate::AppState;
 use askama::Template;
 use askama_axum::IntoResponse;
@@ -18,9 +19,7 @@ struct SusTemplate {
 }
 
 pub(super) fn get_page(id: String) -> askama_axum::Response {
-    let sus_template = SusTemplate {
-        id
-    };
+    let sus_template = SusTemplate { id };
 
     sus_template.into_response()
 }
@@ -170,6 +169,7 @@ struct SystemUsabilityScoreResultsTemplate {
     id: String,
     name: String,
     answers: Vec<[i32; 10]>,
+    survey_url: String,
 }
 
 /// Gets the details page that displays the results of the survey and gives insights to the responses
@@ -269,10 +269,12 @@ pub(super) async fn get_results_page(
         }
     }
 
+    let survey_url = create_share_link(&state.configuration.server_url, &survey_id);
     SystemUsabilityScoreResultsTemplate {
         id: survey_id,
         name,
         answers,
+        survey_url,
     }
-        .into_response()
+    .into_response()
 }

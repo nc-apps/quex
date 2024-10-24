@@ -4,7 +4,6 @@
 <head>
     <meta charset="UTF-8">
     <title>System Usability Score</title>
-    <script src="/copyLink.js"></script>
 </head>
 
 <body>
@@ -12,7 +11,7 @@
         <h1>{{ name }} </h1>
         <p>System Usability Score | Survey ID: {{ id }}</p>
     </hgroup>
-    <button onclick="copyLink('{{ id }}')">Copy Link</button>
+    <button onclick="navigator.clipboard.writeText('{{ survey_url }}')">Copy Link</button>
     <table>
         {% for answers in answers %}
         <tr>

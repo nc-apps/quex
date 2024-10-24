@@ -1,4 +1,5 @@
 use crate::auth::authenticated_user::AuthenticatedUser;
+use crate::routes::create_share_link;
 use crate::AppState;
 use askama::Template;
 use askama_axum::IntoResponse;
@@ -291,7 +292,6 @@ pub(super) async fn create_new_survey(
     Redirect::to(format!("/surveys/ad/{}", survey_id).as_ref())
 }
 
-
 //TODO consider renaming to evaluation or something more fitting
 /// The HTML template for the AttrakDiff survey details and results page
 #[derive(Template)]
@@ -300,6 +300,8 @@ struct AttrakdiffResultsTemplate {
     id: String,
     name: String,
     answers: Vec<[i32; 28]>,
+    /// The url that can be used to share the survey with respondants
+    survey_url: String,
 }
 
 /// Gets the details page that displays the results of the survey and gives insights to the responses
@@ -361,10 +363,7 @@ pub(super) async fn get_results_page(
     let mut rows = match result {
         Ok(rows) => rows,
         Err(error) => {
-            tracing::error!(
-                "Error querying for AttrakDiff responses: {:?}",
-                error
-            );
+            tracing::error!("Error querying for AttrakDiff responses: {:?}", error);
             //TODO display user error message it's not their fault
             return Redirect::to("/surveys").into_response();
         }
@@ -400,11 +399,12 @@ pub(super) async fn get_results_page(
         }
     }
 
-
+    let survey_url = create_share_link(&state.configuration.server_url, &survey_id);
     AttrakdiffResultsTemplate {
         id: survey_id,
         name,
         answers,
+        survey_url,
     }
-        .into_response()
+    .into_response()
 }

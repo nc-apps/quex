@@ -4,7 +4,6 @@
 <head>
     <meta charset="UTF-8">
     <title>Net Promoter Score</title>
-    <script src="/copyLink.js"></script>
 
 </head>
 
@@ -14,7 +13,7 @@
         <p> Net Promoter Score | Survey ID: {{ id }}</p>
     </hgroup>
 
-    <button onclick="copyLink('{{ id }}')">Copy Link</button>
+    <button onclick="navigator.clipboard.writeText('{{ survey_url }}')">Copy Link</button>
     <table>
         {% for answer in answers %}
         <tr>
