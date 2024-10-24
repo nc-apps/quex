@@ -32,7 +32,8 @@ pub(crate) fn create_router() -> Router<AppState> {
         .route("/ad/:id", get(attrakdiff::get_results_page));
 
     Router::new()
-        .route("/surveys", get(get_surveys_page).post(create_survey))
+        .route("/surveys", get(get_surveys_page))
+        .route("/surveys/new", get(get_new_survey_page).post(create_survey))
         .nest("/surveys", survey_routes)
         // These are the public endpoints that respondents can use to access a questionnaire
         // and submit their responses.
@@ -64,7 +65,7 @@ struct Surveys {
 
 /// The HTML template for the surveys overview page
 #[derive(Template)]
-#[template(path = "surveys.html")]
+#[template(path = "surveys/index.html")]
 struct SurveysTemplate {
     surveys: Surveys,
 }
@@ -347,6 +348,14 @@ async fn get_survey_page(
         SurveyType::NetPromoterScore => net_promoter_score::get_page(survey_id),
         SurveyType::SystemUsabilityScore => system_usability_score::get_page(survey_id),
     })
+}
+
+#[derive(Template)]
+#[template(path = "surveys/new.html")]
+struct NewSurveyTemplate;
+
+async fn get_new_survey_page() -> impl IntoResponse {
+    NewSurveyTemplate {}.into_response()
 }
 
 #[derive(Deserialize, Debug)]
