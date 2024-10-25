@@ -4,22 +4,26 @@
 
 <form action="/q/{{ id }}" method="post">
 
-    <div class="grid grid-cols-[repeat(9,auto)] gap-y-3 gap-x-7 pb-12 border-b border-gray-900/10">
+    <div class="grid grid-cols-[repeat(9,auto)] pb-12 border-b gap-y-3 gap-x-7 border-gray-900/10">
 
         {% for question in questions %}
-        <!-- <fieldset class="grid col-span-9 mt-6 space-y-6 grid-cols-subgrid sm:space-y-0"> -->
-        <span class="">{{ question.0 }}</span>
+        <span class="col-span-4 col-start-1 mt-5">{{ question.0 }}</span>
+        <span class="col-span-4 col-start-6 mt-5 text-end">{{ question.1 }}</span>
         {% let question_index = loop.index %}
-        {% for answer_index in 1..8 %}
-        <label for="{{ id }}" class="block">
-            {% let id = format!("Q{}{}", question_index, answer_index) %}
-            <input id="{{ id }}" name="Q{{ question_index }}" type="radio" value="{{ answer_index }}" required
-                class="w-4 h-4 text-indigo-600 border-gray-300 focus:ring-indigo-600">
-            <span class="ml-2 text-sm font-medium leading-6 text-gray-900">{{ answer_index }}</span>
-        </label>
-        {% endfor %}
-        <span>{{ question.1 }}</span>
-        <!-- </fieldset> -->
+        {# Why does fieldset instead of div not work? #}
+        <div class="grid grid-cols-7 col-span-9 col-start-1">
+
+            {% for answer_index in 1..8 %}
+            <label for="{{ id }}" class="block">
+                {% let id = format!("Q{}{}", question_index, answer_index) %}
+                <input id="{{ id }}" name="Q{{ question_index }}" type="radio" value="{{ answer_index }}" required
+                    class="block w-4 h-4 p-2 mx-auto text-indigo-600 border-gray-300 focus:ring-indigo-600">
+                <span class="block text-sm font-medium leading-6 text-center text-gray-900">
+                    {{ answer_index }}
+                </span>
+            </label>
+            {% endfor %}
+        </div>
         {% endfor %}
     </div>
     <div class="flex items-center justify-end mt-6 gap-x-6">
