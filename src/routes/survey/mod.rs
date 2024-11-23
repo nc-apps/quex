@@ -6,8 +6,12 @@ use axum::extract::{FromRequest, Path, Request, State};
 use axum::response::{Redirect, Response};
 use axum::routing::{get, post};
 use axum::{Form, Router};
+use icu::calendar::Gregorian;
+use icu::datetime::{DateTimeFormatterOptions, TypedDateTimeFormatter};
+use icu::locid::Locale;
 use libsql::{named_params, Connection};
 use serde::Deserialize;
+use std::fmt::Debug;
 use std::sync::Arc;
 use time::OffsetDateTime;
 
@@ -28,7 +32,8 @@ pub(crate) fn create_router() -> Router<AppState> {
         .route("/ad/:id", get(attrakdiff::get_results_page));
 
     Router::new()
-        .route("/surveys", get(get_surveys_page).post(create_survey))
+        .route("/surveys", get(get_surveys_page))
+        .route("/surveys/new", get(get_new_survey_page).post(create_survey))
         .nest("/surveys", survey_routes)
         // These are the public endpoints that respondents can use to access a questionnaire
         // and submit their responses.
@@ -46,6 +51,8 @@ pub(crate) fn create_router() -> Router<AppState> {
 struct Survey {
     id: String,
     name: String,
+    created_human_readable: String,
+    created_machine_readable: String,
 }
 
 /// Contains vectors for each survey type with the survey ids
@@ -58,7 +65,7 @@ struct Surveys {
 
 /// The HTML template for the surveys overview page
 #[derive(Template)]
-#[template(path = "surveys.html")]
+#[template(path = "surveys/index.html")]
 struct SurveysTemplate {
     surveys: Surveys,
 }
@@ -131,10 +138,50 @@ async fn get_surveys_page(
                 };
 
                 //TODO load created_at_utc to display date created to user
+                let result: Result<i64, libsql::Error> = row.get(3);
+                let created_at_utc = match result {
+                    Ok(created_at_utc) => created_at_utc,
+                    Err(error) => {
+                        tracing::error!("Error reading survey created_at_utc: {:?}", error);
+                        //TODO display user error message it's not their fault
+                        return Err(Redirect::to("/surveys/error"));
+                    }
+                };
+
+                let result = OffsetDateTime::from_unix_timestamp(created_at_utc);
+                let created_at_utc = match result {
+                    Ok(created_at_utc) => created_at_utc,
+                    Err(error) => {
+                        tracing::error!(
+                            "Error converting created_at_utc to OffsetDateTime: {:?}",
+                            error
+                        );
+                        //TODO display user error message it's not their fault
+                        return Err(Redirect::to("/surveys/error"));
+                    }
+                };
+
+                // More information on the correct datetime format
+                // - https://html.spec.whatwg.org/multipage/text-level-semantics.html#datetime-value
+                // - https://html.spec.whatwg.org/multipage/common-microsyntaxes.html#valid-local-date-and-time-string
+                // ISO 8601 format should be fine though 🥴
+                let machine_formatted_date = match created_at_utc
+                    .format(&time::format_description::well_known::Iso8601::DEFAULT)
+                {
+                    Ok(date) => date,
+                    Err(error) => {
+                        tracing::error!("Error formatting date: {:?}", error);
+                        //TODO display user error message it's not their fault
+                        return Err(Redirect::to("/surveys/error"));
+                    }
+                };
 
                 let survey = Survey {
                     id,
                     name,
+                    //TODO add user timezone offset
+                    created_human_readable: format_date(created_at_utc),
+                    created_machine_readable: machine_formatted_date,
                 };
 
                 match survey_type.as_str() {
@@ -303,6 +350,14 @@ async fn get_survey_page(
     })
 }
 
+#[derive(Template)]
+#[template(path = "surveys/new.html")]
+struct NewSurveyTemplate;
+
+async fn get_new_survey_page() -> impl IntoResponse {
+    NewSurveyTemplate {}.into_response()
+}
+
 #[derive(Deserialize, Debug)]
 struct CreateSurveyRequest {
     /// The name of the survey. It is optional to reduce user friction, and we crate a random name if
@@ -327,12 +382,84 @@ async fn create_survey(
     }
 }
 
-
 #[derive(Template)]
 #[template(path = "thanks.html")]
 struct ThanksTemplate {}
 
-
 async fn thanks() -> impl IntoResponse {
     ThanksTemplate {}.into_response()
+}
+
+fn format_date(date: OffsetDateTime) -> String {
+    // The icu example
+    use icu::calendar::{DateTime, Gregorian};
+    use icu::datetime::{
+        options::length, DateTimeFormatter, DateTimeFormatterOptions, TypedDateTimeFormatter,
+    };
+    use icu::locid::{locale, Locale};
+
+    // See the next code example for a more ergonomic example with .into().
+    let options = DateTimeFormatterOptions::Length(length::Bag::from_date_time_style(
+        length::Date::Medium,
+        length::Time::Short,
+    ));
+
+    // Can use DateFormatter alternatively to dynamically format date based on accept-language header (see icu crate examples)
+    // This uses unicode locale identifiers which might not line up with accept language header but should 99% of the time
+    let formatter = TypedDateTimeFormatter::<Gregorian>::try_new(&locale!("en-US").into(), options)
+        .expect("Failed to create TypedDateTimeFormatter instance.");
+
+    let date = DateTime::try_new_gregorian_datetime(
+        date.year(),
+        date.month().into(),
+        date.day(),
+        date.hour(),
+        date.minute(),
+        date.second(),
+    )
+    .unwrap();
+
+    let formatted = formatter.format(&date);
+
+    let date_string = formatter.format_to_string(&date);
+    date_string
+}
+
+#[test]
+fn format_date_test() {
+    // The icu crate example
+    use icu::calendar::{DateTime, Gregorian};
+    use icu::datetime::{
+        options::length, DateTimeFormatter, DateTimeFormatterOptions, TypedDateTimeFormatter,
+    };
+    use icu::locid::{locale, Locale};
+    use std::str::FromStr;
+
+    // See the next code example for a more ergonomic example with .into().
+    let options = DateTimeFormatterOptions::Length(length::Bag::from_date_time_style(
+        length::Date::Medium,
+        length::Time::Short,
+    ));
+
+    // You can work with a formatter that can select the calendar at runtime:
+    let locale = Locale::from_str("en-u-ca-gregory").unwrap();
+    let dtf = DateTimeFormatter::try_new(&locale.into(), options.clone())
+        .expect("Failed to create DateTimeFormatter instance.");
+
+    // Or one that selects a calendar at compile time:
+    let typed_dtf = TypedDateTimeFormatter::<Gregorian>::try_new(&locale!("en").into(), options)
+        .expect("Failed to create TypedDateTimeFormatter instance.");
+
+    let typed_date = DateTime::try_new_gregorian_datetime(2020, 9, 12, 12, 34, 28).unwrap();
+    // prefer using ISO dates with DateTimeFormatter
+    let date = typed_date.to_iso().to_any();
+
+    let formatted_date = dtf.format(&date).expect("Calendars should match");
+    let typed_formatted_date = typed_dtf.format(&typed_date);
+
+    let formatted_date_string = dtf.format_to_string(&date).expect("Calendars should match");
+    let typed_formatted_date_string = typed_dtf.format_to_string(&typed_date);
+
+    assert_eq!(formatted_date_string, "Sep 12, 2020, 12:34 PM");
+    assert_eq!(typed_formatted_date_string, "Sep 12, 2020, 12:34 PM");
 }
