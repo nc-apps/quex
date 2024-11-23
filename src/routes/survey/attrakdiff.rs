@@ -8,6 +8,7 @@ use axum::response::Redirect;
 use axum::Form;
 use libsql::named_params;
 use nanoid::nanoid;
+use reqwest::StatusCode;
 use serde::Deserialize;
 use std::sync::Arc;
 use time::OffsetDateTime;
@@ -407,4 +408,62 @@ pub(super) async fn get_results_page(
         survey_url,
     }
     .into_response()
+}
+
+pub(super) async fn download_results(
+    State(state): State<AppState>,
+    Path(survey_id): Path<String>,
+) -> Result<String, StatusCode> {
+    let result = state
+        .connection
+        .query(
+            "SELECT * FROM attrakdiff_responses WHERE survey_id = :survey_id",
+            named_params![":survey_id": survey_id.clone()],
+        )
+        .await;
+    let mut rows = match result {
+        Ok(rows) => rows,
+        Err(error) => {
+            tracing::error!("Error querying for AttrakDiff survey: {:?}", error);
+            //TODO display user error message it's not their fault
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
+
+    let mut csv = String::new();
+
+    csv += "Human-Technical, Isolating-Connective, Pleasant-Unpleasant, Inventive-Conventional, Simple-Complicated, Professional-Unprofessional, Ugly-Attractive, Practical-Impractical, Likable-Disagreeable, Cumbersome-Straightforward, Stylish-Tacky, Predictable-Unpredictable, Cheap-Premium, Alienating-Integrating, Brings me closer to people-Separates me from people, Unpresentable-Respondents, Rejecting-Inviting, Unimaginative-Creative, Good-Bad, Confusing-Clearly structured, Repelling-Appealing, Bold-Cautious, Innovative-Conservative, Dull-Captivating, Undemanding-Challenging, Motivating-Discouraging, Novel-Ordinary, Unruly-Manageable\n";
+
+    loop {
+        let result = rows.next().await;
+        match result {
+            Ok(None) => break,
+            Ok(Some(row)) => {
+                for i in 2i32..30 {
+                    let answer = row.get::<i32>(i);
+                    let answer = match answer {
+                        Ok(answer) => answer,
+                        Err(error) => {
+                            tracing::error!("Error reading survey id: {:?}", error);
+                            //TODO display user error message it's not their fault
+                            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+                        }
+                    };
+                    csv += &format!("{}, ", answer);
+                }
+                // geht schöner iwie
+                csv.pop();
+                csv.pop();
+                csv.push('\n');
+            }
+            Err(error) => {
+                tracing::error!("Error reading query result: {:?}", error);
+                //TODO display user error message it's not their fault
+                return Err(StatusCode::INTERNAL_SERVER_ERROR);
+            }
+        }
+    }
+    tracing::debug!("csv: {:?}", csv);
+
+    return Ok(csv);
 }
