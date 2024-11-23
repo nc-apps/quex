@@ -29,7 +29,8 @@ pub(crate) fn create_router() -> Router<AppState> {
         .route("/sus", post(system_usability_score::create_new_survey))
         .route("/sus/:id", get(system_usability_score::get_results_page))
         .route("/ad", post(attrakdiff::create_new_survey))
-        .route("/ad/:id", get(attrakdiff::get_results_page));
+        .route("/ad/:id", get(attrakdiff::get_results_page))
+        .route("/ad/:id/download", get(attrakdiff::download_results));
 
     Router::new()
         .route("/surveys", get(get_surveys_page))
