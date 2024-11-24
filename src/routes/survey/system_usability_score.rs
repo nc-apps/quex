@@ -246,17 +246,17 @@ pub(super) async fn get_results_page(
         match result {
             Ok(Some(row)) => {
                 let mut response = [0; 10];
-                for i in 0usize..10 {
-                    let answer = row.get::<i32>((i + 2).try_into().unwrap());
+                for index in 2u8..12 {
+                    let answer = row.get::<i32>(index.into());
                     let answer = match answer {
                         Ok(answer) => answer,
                         Err(error) => {
-                            tracing::error!("Error reading response number {i}: {error:?}");
+                            tracing::error!("Error reading response number {index}: {error:?}");
                             //TODO display user error message it's not their fault
                             return Redirect::to("/surveys").into_response();
                         }
                     };
-                    response[i] = answer;
+                    response[index as usize - 2] = answer;
                 }
                 answers.push(response);
             }

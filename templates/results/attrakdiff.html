@@ -88,7 +88,7 @@
     </div>
 </div>
 <a class="inline-flex items-center px-3 py-2 mt-4 text-sm font-semibold text-white bg-indigo-600 rounded-md shadow-sm md:mt-0 hover:bg-indigo-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
-    download="ad_results_{{ id }}.csv" href="/surveys/ad/{{ id }}/download">Dowload
+   download="{{ crate::routes::survey::get_file_name(id) }}" href="/surveys/ad/{{ id }}/download">Download
     CSV</a>
 <div class="px-4 sm:px-6 lg:px-8">
     <div class="flow-root mt-8">

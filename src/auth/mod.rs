@@ -1,3 +1,4 @@
+use self::authenticated_user::AuthenticatedUser;
 use crate::{
     email::{send_sign_in_email, Email},
     AppState,
@@ -16,8 +17,6 @@ use axum_extra::extract::{
 use libsql::named_params;
 use nanoid::nanoid;
 use serde::Deserialize;
-
-use self::authenticated_user::AuthenticatedUser;
 
 pub(crate) mod authenticated_user;
 
@@ -108,6 +107,7 @@ async fn complete_signin(
     let user_id: String = row.get(0).unwrap();
 
     // Delete sign in attempt to prevent reusage
+
     connection
         .execute(
             "DELETE FROM signin_attempts WHERE id = :id",
@@ -136,11 +136,15 @@ async fn complete_signin(
     // The cookie does not need to be encrypted as it doesn't contain any sensitive information
     let cookie = Cookie::build(("session", session_id))
         .path("/")
-        .secure(true)
+        // Using secure and SameSite Strict cookies without HTTPS breaks development sign in on Safari
+        // Always require HTTPS for production
+        .secure(cfg!(not(debug_assertions)))
         // Tell browsers to not allow JavaScript to access the cookie. Prevents some XSS attacks
         // (JS can still indirectly find out if user is authenticated by trying to access authenticated endpoints)
         .http_only(true)
         // Prevents CRSF attack
+        // This is somewhat complex. Here is a good article
+        // https://andrewlock.net/understanding-samesite-cookies/
         .same_site(SameSite::Strict)
         .expires(expires_at);
 
