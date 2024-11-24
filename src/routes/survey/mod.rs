@@ -391,9 +391,7 @@ async fn thanks() -> impl IntoResponse {
 fn format_date(date: OffsetDateTime) -> String {
     // The icu example
     use icu::calendar::{DateTime, Gregorian};
-    use icu::datetime::{
-        options::length, DateTimeFormatterOptions, TypedDateTimeFormatter,
-    };
+    use icu::datetime::{options::length, DateTimeFormatterOptions, TypedDateTimeFormatter};
     use icu::locid::locale;
 
     // See the next code example for a more ergonomic example with .into().
