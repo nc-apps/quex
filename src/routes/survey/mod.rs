@@ -464,3 +464,9 @@ fn format_date_test() {
     assert_eq!(formatted_date_string, "Sep 12, 2020, 12:34 PM");
     assert_eq!(typed_formatted_date_string, "Sep 12, 2020, 12:34 PM");
 }
+
+pub(crate) fn get_file_name(survey_id: &str) -> String {
+    // The survey id should be URL safe and ASCII only by default
+    assert!(survey_id.is_ascii());
+    format!("survey responses {}.csv", survey_id)
+}
