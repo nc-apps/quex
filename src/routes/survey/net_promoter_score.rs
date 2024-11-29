@@ -8,6 +8,7 @@ use axum::response::Redirect;
 use axum::Form;
 use libsql::named_params;
 use nanoid::nanoid;
+use reqwest::StatusCode;
 use serde::Deserialize;
 use std::sync::Arc;
 use time::OffsetDateTime;
@@ -236,4 +237,69 @@ pub(super) async fn get_results_page(
         survey_url,
     }
     .into_response()
+}
+
+pub(super) async fn download_results(
+    State(state): State<AppState>,
+    Path(survey_id): Path<String>,
+) -> Result<String, StatusCode> {
+    let result = state
+        .connection
+        .query(
+            "SELECT * FROM net_promoter_score_responses WHERE survey_id = :survey_id",
+            named_params![":survey_id": survey_id.clone()],
+        )
+        .await;
+
+    let mut rows = match result {
+        Ok(rows) => rows,
+        Err(error) => {
+            tracing::error!("Error querying for Net Promoter Score survey: {:?}", error);
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
+
+    let mut csv = String::new();
+    csv += "How likely are you to recommend us on a scale from 0 to 10?, And why?\n";
+
+    loop {
+        let result = rows.next().await;
+        match result {
+            Ok(None) => break, // Keine weiteren Zeilen
+            Ok(Some(row)) => {
+                let mut row_values = Vec::new(); // Sammeln der Werte der aktuellen Zeile
+
+                for i in 2..4 {
+                    // Schleife über die relevanten Spalten
+                    let value: String = match row.get::<Option<i32>>(i) {
+                        // Versuche, einen Integer zu lesen
+                        Ok(Some(num)) => num.to_string(), // Wenn es ein `i32` ist, wandle ihn in einen String
+                        Ok(None) => "NULL".to_string(),   // Falls der Wert `NULL` ist
+                        Err(_) => match row.get::<Option<String>>(i) {
+                            // Falls kein `i32`, versuche String
+                            Ok(Some(text)) => text,
+                            Ok(None) => "NULL".to_string(), // Falls auch der String `NULL` ist
+                            Err(error) => {
+                                tracing::error!("Error reading value at index {}: {:?}", i, error);
+                                return Err(StatusCode::INTERNAL_SERVER_ERROR);
+                            }
+                        },
+                    };
+
+                    row_values.push(value); // Hinzufügen des Werts in die Liste
+                }
+
+                // Füge alle Werte der Zeile als CSV hinzu
+                csv += &row_values.join(", ");
+                csv.push('\n');
+            }
+            Err(error) => {
+                tracing::error!("Error reading query result: {:?}", error);
+                return Err(StatusCode::INTERNAL_SERVER_ERROR);
+            }
+        }
+    }
+
+    tracing::debug!("csv: {:?}", csv);
+    Ok(csv)
 }
