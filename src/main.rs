@@ -2,7 +2,7 @@ use std::{env, net::Ipv4Addr, time::Duration};
 
 use crate::routes::survey;
 use axum::{http::Uri, routing::get, Router};
-use dotenv::dotenv;
+use dotenvy::dotenv;
 use libsql::{named_params, Connection};
 use tower_http::services::ServeDir;
 use tracing_subscriber::layer::SubscriberExt;
