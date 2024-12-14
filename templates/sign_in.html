@@ -14,6 +14,9 @@ content %}
             required
         /><br />
         <button type="submit">Next</button>
+        {% if let Some(url) = sign_in_with_google_url %}
+        <a href="{{ url }}">Sign in with Google</a>
+        {% endif %}
     </form>
 </fieldset>
 {% call super() %} {% endblock %}

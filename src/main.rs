@@ -1,6 +1,8 @@
+use std::sync::Arc;
 use std::{env, net::Ipv4Addr, time::Duration};
 
 use crate::routes::survey;
+use axum::http::uri::InvalidUri;
 use axum::{http::Uri, routing::get, Router};
 use dotenvy::dotenv;
 use libsql::{named_params, Connection};
@@ -13,8 +15,20 @@ mod database;
 mod email;
 mod routes;
 
+#[derive(thiserror::Error, Debug)]
+enum AppError {
+    #[error("No quex url was configured with environment variables or there was an error reading it. {0}")]
+    NoUrlConfigured(env::VarError),
+
+    #[error("Quex url is badly formatted. {0}")]
+    BadUrl(#[from] InvalidUri),
+
+    #[error("Error reading google client id")]
+    ReadClientIdError(env::VarError),
+}
+
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), AppError> {
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
@@ -34,11 +48,21 @@ async fn main() {
     // Configuration
     //TODO implement fallback to localhost
     //TODO implement warning that users can not follow links (e.g. in emails) if host is localhost or 127.0.0.1
-    let url = env::var("QUEX_URL").expect("QUEX_URL environment variable must be set");
+    let url = env::var("QUEX_URL").map_err(AppError::NoUrlConfigured)?;
 
-    let url = Uri::try_from(url).expect("Invalid URL in QUEX_URL environment variable");
+    let url = Uri::try_from(url)?;
     let port = url.port().map(|port| port.as_u16()).unwrap_or(80);
-    let configuration = Configuration { server_url: url };
+
+    let client_id: Option<Arc<str>> = match env::var("GOOGLE_CLIENT_ID") {
+        Ok(client_id) => Some(client_id.into()),
+        Err(env::VarError::NotPresent) => None,
+        Err(error) => return Err(AppError::ReadClientIdError(error)),
+    };
+
+    let configuration = Configuration {
+        server_url: url,
+        client_id,
+    };
 
     let client = reqwest::Client::new();
     let app_state = AppState {
@@ -66,6 +90,8 @@ async fn main() {
 
     tracing::debug!("listening on http://{}", listener.local_addr().unwrap());
     axum::serve(listener, app).await.unwrap();
+
+    Ok(())
 }
 
 #[derive(Clone)]
@@ -73,6 +99,8 @@ pub(crate) struct Configuration {
     /// The server URL under which the server can be reached publicly for clients.
     /// A user clicking an email link will be brought to this URL.
     server_url: Uri,
+    /// Google Auth Platform Client id for OpenID Connect authenticaton flow
+    client_id: Option<Arc<str>>,
 }
 
 #[derive(Clone)]

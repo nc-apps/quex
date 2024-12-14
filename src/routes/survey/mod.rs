@@ -6,9 +6,6 @@ use axum::extract::{FromRequest, Path, Request, State};
 use axum::response::{Redirect, Response};
 use axum::routing::{get, post};
 use axum::{Form, Router};
-use icu::calendar::Gregorian;
-use icu::datetime::{DateTimeFormatterOptions, TypedDateTimeFormatter};
-use icu::locid::Locale;
 use libsql::{named_params, Connection};
 use serde::Deserialize;
 use std::fmt::Debug;
@@ -394,10 +391,8 @@ async fn thanks() -> impl IntoResponse {
 fn format_date(date: OffsetDateTime) -> String {
     // The icu example
     use icu::calendar::{DateTime, Gregorian};
-    use icu::datetime::{
-        options::length, DateTimeFormatter, DateTimeFormatterOptions, TypedDateTimeFormatter,
-    };
-    use icu::locid::{locale, Locale};
+    use icu::datetime::{options::length, DateTimeFormatterOptions, TypedDateTimeFormatter};
+    use icu::locid::locale;
 
     // See the next code example for a more ergonomic example with .into().
     let options = DateTimeFormatterOptions::Length(length::Bag::from_date_time_style(

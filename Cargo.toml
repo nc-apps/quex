@@ -36,3 +36,9 @@ tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 thiserror = "1.0.61"
 # For Date and Time formatting based on locale information
 icu = "1.5.0"
+# For generating Nonces and anti forgery tokens for OAuth/OpenID Connect requests for authentication/sign-in
+getrandom = "0.2.15"
+# For easier URL handling especially in serialized formats
+url = { version = "2.5.4", features = ["serde"] }
+# For (de)serializing URL query parameters
+serde_urlencoded = "0.7.1"
