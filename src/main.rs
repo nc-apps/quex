@@ -2,8 +2,11 @@ use std::sync::Arc;
 use std::{env, net::Ipv4Addr, time::Duration};
 
 use crate::routes::survey;
+use auth::signer::Signer;
 use axum::http::uri::InvalidUri;
 use axum::{http::Uri, routing::get, Router};
+use base64::prelude::BASE64_URL_SAFE_NO_PAD;
+use base64::Engine;
 use dotenvy::dotenv;
 use libsql::{named_params, Connection};
 use tower_http::services::ServeDir;
@@ -25,6 +28,15 @@ enum AppError {
 
     #[error("Error reading google client id")]
     ReadClientIdError(env::VarError),
+
+    #[error("Could not read anti-forgery signing secret")]
+    ReadAntiForgerySigningSecretError(env::VarError),
+
+    #[error("Error decoding anti-forgery signing secret")]
+    DecodeAntiForgerySigningSecretError(base64::DecodeError),
+
+    #[error("Anti-forgery signing secret is not 32 bytes long")]
+    AntiForgerySigningSecretLengthError,
 }
 
 #[tokio::main]
@@ -59,6 +71,16 @@ async fn main() -> Result<(), AppError> {
         Err(error) => return Err(AppError::ReadClientIdError(error)),
     };
 
+    let signing_secret = env::var("ANTI_FORGERY_SIGNING_SECRET")
+        .map_err(AppError::ReadAntiForgerySigningSecretError)?;
+    let signing_secret: [u8; 32] = BASE64_URL_SAFE_NO_PAD
+        .decode(signing_secret)
+        .map_err(AppError::DecodeAntiForgerySigningSecretError)?
+        .try_into()
+        .map_err(|_| AppError::AntiForgerySigningSecretLengthError)?;
+
+    let signer = Signer::new(signing_secret);
+
     let configuration = Configuration {
         server_url: url,
         client_id,
@@ -69,6 +91,7 @@ async fn main() -> Result<(), AppError> {
         connection,
         client,
         configuration,
+        anti_forgery_signer: signer,
     };
 
     let auth_routes = auth::create_router();
@@ -108,6 +131,7 @@ pub(crate) struct AppState {
     connection: Connection,
     client: reqwest::Client,
     configuration: Configuration,
+    anti_forgery_signer: Signer,
 }
 
 /// Runs forever and cleans up expired app data about every 5 minutes

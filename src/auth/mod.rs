@@ -1,10 +1,12 @@
+use std::sync::Arc;
+
 use crate::{
     email::{send_sign_in_email, Email},
     AppState,
 };
 use askama_axum::{IntoResponse, Template};
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::{self},
     response::Redirect,
     routing::get,
@@ -19,11 +21,13 @@ use getrandom::getrandom;
 use libsql::named_params;
 use nanoid::nanoid;
 use serde::{Deserialize, Serialize};
+use signer::{AntiforgeryToken, CreateAntiforgeryTokenError};
 use url::Url;
 
 use self::authenticated_user::AuthenticatedUser;
 
 pub(crate) mod authenticated_user;
+pub(crate) mod signer;
 
 //TODO decide how long a session should live
 const SESSION_LIFETIME: time::Duration = time::Duration::days(30);
@@ -40,6 +44,7 @@ async fn create_account(
         connection,
         configuration,
         client,
+        ..
     }): State<AppState>,
     Form(request): Form<CreateAccountRequest>,
 ) -> impl IntoResponse {
@@ -179,6 +184,7 @@ async fn sign_in(
         connection,
         configuration,
         client,
+        ..
     }): State<AppState>,
     Form(request): Form<SignInRequest>,
 ) -> Redirect {
@@ -344,6 +350,9 @@ enum SignInWithGoogleError {
 
     #[error("Failed to serialize query parameters")]
     QueryError(#[from] serde_urlencoded::ser::Error),
+
+    #[error("Failed creating anti-forgery token")]
+    CreateAntiforgeryTokenError(#[from] CreateAntiforgeryTokenError),
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -356,17 +365,6 @@ fn ensure_https(url: &mut Url) -> Result<(), SetSchemeError> {
     }
 
     Ok(())
-}
-
-#[derive(Serialize, Debug)]
-struct AntiforgeryToken(String);
-impl AntiforgeryToken {
-    fn new() -> AntiforgeryToken {
-        let mut token = [0; 30];
-        getrandom(&mut token).unwrap();
-        let token = BASE64_URL_SAFE_NO_PAD.encode(&token);
-        Self(token)
-    }
 }
 
 #[derive(Debug)]
@@ -418,9 +416,6 @@ async fn get_sign_in_with_google_url(
         todo!("Handle sign in with google disabled because optional client id is not configured");
     };
 
-    // Create anti-forgery token
-    let antiforgery_token = AntiforgeryToken::new();
-
     let url = Url::parse("https://accounts.google.com").unwrap();
     let DiscoveryDocument {
         mut authorization_endpoint,
@@ -430,6 +425,9 @@ async fn get_sign_in_with_google_url(
 
     let mut redirect_url = state.configuration.server_url.to_string().parse::<Url>()?;
     redirect_url.set_path("/redirect");
+
+    // Create anti-forgery token
+    let antiforgery_token = state.anti_forgery_signer.create_antiforgery_token()?;
     let request = AuthenticationRequest {
         client_id: client_id.as_ref(),
         nonce: Nonce::new(),
@@ -445,6 +443,25 @@ async fn get_sign_in_with_google_url(
     Ok(authorization_endpoint)
 }
 
+#[derive(Deserialize, Debug)]
+struct AuthenticationResponse {
+    state: AntiforgeryToken,
+    code: Arc<str>,
+    #[serde(rename = "scope")]
+    scopes: Arc<str>,
+}
+
+async fn redirect(State(state): State<AppState>, Query(response): Query<AuthenticationResponse>) {
+    tracing::debug!("Received redirect after authentication {:?}", response);
+
+    //TODO this doesn't protect against replay yet
+    if !state.anti_forgery_signer.is_token_valid(response.state) {
+        tracing::error!("Invalid anti-forgery token in state parameter");
+        return;
+    }
+    tracing::debug!("Anti forgery token is valid");
+}
+
 pub(crate) fn create_router() -> Router<AppState> {
     Router::new()
         .route("/signup", get(sign_up_handler).post(create_account))
@@ -454,4 +471,5 @@ pub(crate) fn create_router() -> Router<AppState> {
         .route("/signin/:attempt_id", get(complete_signin))
         .route("/signin/expired", get(sign_in_expired))
         .route("/signout", get(sign_out))
+        .route("/redirect", get(redirect))
 }

@@ -42,3 +42,7 @@ getrandom = "0.2.15"
 url = { version = "2.5.4", features = ["serde"] }
 # For (de)serializing URL query parameters
 serde_urlencoded = "0.7.1"
+# For signing anti forgery tokens used in authentication
+hmac = "0.12.1"
+# Used by HMAC for signing
+sha2 = "0.10.8"
