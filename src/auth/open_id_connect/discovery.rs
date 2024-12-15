@@ -21,6 +21,7 @@ pub(crate) enum GetDocumentError {
 pub(crate) struct Document {
     pub(crate) authorization_endpoint: Url,
     pub(crate) token_endpoint: Url,
+    pub(crate) jwks_uri: Url,
 }
 
 #[derive(Clone)]

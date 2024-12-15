@@ -18,11 +18,16 @@ use axum_extra::extract::{
 };
 use base64::{prelude::BASE64_URL_SAFE_NO_PAD, Engine};
 use getrandom::getrandom;
+use jsonwebtoken::{
+    jwk::{Jwk, JwkSet},
+    DecodingKey, Validation,
+};
 use libsql::named_params;
 use nanoid::nanoid;
 use open_id_connect::discovery;
 use serde::{Deserialize, Serialize};
 use signer::{AntiforgeryToken, CreateAntiforgeryTokenError};
+use time::OffsetDateTime;
 use url::Url;
 
 use self::authenticated_user::AuthenticatedUser;
@@ -444,6 +449,8 @@ enum HandleAuthenticationResponseError {
     ResponseError(reqwest::Error),
     #[error("Failed to deserialize response: {0}")]
     DeserializeError(reqwest::Error),
+    #[error("Failed to validate id token: {0}")]
+    VerifyIdTokenError(#[from] ValidateIdTokenError),
 }
 
 impl IntoResponse for HandleAuthenticationResponseError {
@@ -483,6 +490,78 @@ struct AccessTokenResponse {
     refresh_token: Option<Arc<str>>,
 }
 
+#[derive(thiserror::Error, Debug)]
+enum ValidateIdTokenError {
+    #[error("Failed to ensure url uses https: {0}")]
+    EnsureHttpsError(#[from] SetSchemeError),
+    #[error("Failed to send request for verification keys: {0}")]
+    RequestError(#[from] reqwest::Error),
+    #[error("Error decoding id token header: {0}")]
+    DecodeHeaderError(#[from] jsonwebtoken::errors::Error),
+    #[error("Expected key id (kid) in header but none was found")]
+    NoKeyId,
+    #[error("Header key not in jwks")]
+    MissingKey,
+    #[error("Failed to construct decoding key from jwk: {0}")]
+    DecodingKeyError(jsonwebtoken::errors::Error),
+    #[error("Error validating token: {0}")]
+    ValidationError(jsonwebtoken::errors::Error),
+}
+
+#[derive(Deserialize, Debug)]
+enum GoogleIssuer {
+    #[serde(rename = "accounts.google.com")]
+    Accounts,
+    #[serde(rename = "https://accounts.google.com")]
+    HttpsAccounts,
+}
+
+#[derive(Deserialize, Debug)]
+struct Claims<I> {
+    #[serde(rename = "aud")]
+    audience: Arc<str>,
+    #[serde(
+        rename = "exp",
+        deserialize_with = "time::serde::timestamp::deserialize"
+    )]
+    expiration_time: OffsetDateTime,
+    #[serde(
+        rename = "iat",
+        deserialize_with = "time::serde::timestamp::deserialize"
+    )]
+    issued_at: OffsetDateTime,
+    #[serde(rename = "iss")]
+    issuer: I,
+    #[serde(rename = "sub")]
+    subject: Arc<str>,
+}
+
+async fn validate_id_token(
+    id_token: &str,
+    client: &reqwest::Client,
+    mut jwks_uri: Url,
+    client_id: &str,
+) -> Result<Claims<GoogleIssuer>, ValidateIdTokenError> {
+    ensure_https(&mut jwks_uri)?;
+    // jsonwebtoken::jwk::Jwk
+    let response = client.get(jwks_uri).send().await?.error_for_status()?;
+    let jwks: JwkSet = response.json().await?;
+
+    let header = jsonwebtoken::decode_header(&id_token)?;
+    let key_id = header.kid.ok_or(ValidateIdTokenError::NoKeyId)?;
+    let key = jwks.find(&key_id).ok_or(ValidateIdTokenError::MissingKey)?;
+
+    let decoding_key =
+        DecodingKey::from_jwk(key).map_err(ValidateIdTokenError::DecodingKeyError)?;
+    let mut validation = Validation::new(header.alg);
+    validation.set_audience(&[client_id]);
+
+    let data = jsonwebtoken::decode::<Claims<GoogleIssuer>>(id_token, &decoding_key, &validation)
+        .map_err(ValidateIdTokenError::ValidationError)?;
+
+    Ok(data.claims)
+}
+
 async fn handle_authentication_response(
     State(state): State<AppState>,
     Query(response): Query<AuthenticationResponse>,
@@ -499,7 +578,8 @@ async fn handle_authentication_response(
 
     let url = Url::parse("https://accounts.google.com").unwrap();
     // Exchange code for access token
-    let mut token_endpoint = state.discovery_cache.get(url).await?.token_endpoint.clone();
+    let discovery_document = state.discovery_cache.get(url).await?;
+    let mut token_endpoint = discovery_document.token_endpoint.clone();
 
     ensure_https(&mut token_endpoint)?;
 
@@ -510,7 +590,7 @@ async fn handle_authentication_response(
 
     let request = AccessTokenRequest {
         code: response.code,
-        client_id: credentials.id,
+        client_id: credentials.id.clone(),
         client_secret: credentials.secret,
         redirect_uri: create_redirect_url(state.configuration.server_url)?,
         grant_type: GrantType::AuthorizationCode,
@@ -531,6 +611,12 @@ async fn handle_authentication_response(
         .map_err(HandleAuthenticationResponseError::DeserializeError)?;
 
     tracing::debug!("Received access token response: {:?}", response);
+
+    let keys_url = discovery_document.jwks_uri.clone();
+    let claims =
+        validate_id_token(&response.id_token, &state.client, keys_url, &credentials.id).await?;
+
+    tracing::debug!("Claims: {:?}", claims);
 
     Ok(())
 }
