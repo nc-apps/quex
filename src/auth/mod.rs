@@ -2,12 +2,12 @@ use std::sync::Arc;
 
 use crate::{
     email::{send_sign_in_email, Email},
-    AppState,
+    AppState, ClientCredentials,
 };
 use askama_axum::{IntoResponse, Template};
 use axum::{
     extract::{Path, Query, State},
-    http::{self},
+    http::{self, Uri},
     response::Redirect,
     routing::get,
     Form, Router,
@@ -20,6 +20,7 @@ use base64::{prelude::BASE64_URL_SAFE_NO_PAD, Engine};
 use getrandom::getrandom;
 use libsql::named_params;
 use nanoid::nanoid;
+use open_id_connect::discovery;
 use serde::{Deserialize, Serialize};
 use signer::{AntiforgeryToken, CreateAntiforgeryTokenError};
 use url::Url;
@@ -27,6 +28,7 @@ use url::Url;
 use self::authenticated_user::AuthenticatedUser;
 
 pub(crate) mod authenticated_user;
+pub(crate) mod open_id_connect;
 pub(crate) mod signer;
 
 //TODO decide how long a session should live
@@ -296,57 +298,16 @@ async fn sign_out(jar: CookieJar) -> (CookieJar, Redirect) {
 }
 
 #[derive(thiserror::Error, Debug)]
-enum GetDiscoveryDocumentError {
-    #[error("Failed to build URI for authority")]
-    BuildUriError(#[from] http::Error),
-    #[error("Failed to send request for discovery document")]
-    RequestError(reqwest::Error),
-    #[error("Error deserializing discovery document")]
-    DeserializeError(reqwest::Error),
-}
-
-#[derive(Deserialize, Debug)]
-struct DiscoveryDocument {
-    authorization_endpoint: Url,
-}
-
-async fn get_discovery_document(
-    client: &reqwest::Client,
-    mut url: Url,
-) -> Result<DiscoveryDocument, GetDiscoveryDocumentError> {
-    // https://accounts.google.com/.well-known/openid-configuration
-
-    // let uri = uri::Builder::new()
-    //     .scheme("https")
-    //     .authority(authority)
-    //     .path_and_query("/.well-known/openid-configuration")
-    //     .build()?;
-
-    url.set_path("/.well-known/openid-configuration");
-
-    let response = client
-        .get(url)
-        .send()
-        .await
-        .map_err(GetDiscoveryDocumentError::RequestError)?;
-
-    let document = response
-        .json()
-        .await
-        .map_err(GetDiscoveryDocumentError::DeserializeError)?;
-
-    Ok(document)
-}
-
-#[derive(thiserror::Error, Debug)]
 enum SignInWithGoogleError {
+    #[error("Client credentials not configured")]
+    NoClientCredentials,
     #[error("Failed to get discovery document")]
-    GetDiscoveryDocumentError(#[from] GetDiscoveryDocumentError),
+    GetDiscoveryDocumentError(#[from] discovery::GetDocumentError),
     #[error("Failed to ensure url uses https")]
     EnsureHttpsError(#[from] SetSchemeError),
 
     #[error("Configured server uri is not a valid url")]
-    BadServerUrl(#[from] url::ParseError),
+    BadServerUrl(#[from] BadServerUrl),
 
     #[error("Failed to serialize query parameters")]
     QueryError(#[from] serde_urlencoded::ser::Error),
@@ -409,22 +370,36 @@ struct AuthenticationRequest<'a, const SCOPES_LENGTH: usize> {
     nonce: Nonce,
 }
 
+const REDIRECT_PATH: &str = "/redirect";
+#[derive(thiserror::Error, Debug)]
+#[error("Failed to parse server url")]
+struct BadServerUrl(#[from] url::ParseError);
+fn create_redirect_url(server_url: Uri) -> Result<Url, BadServerUrl> {
+    let mut redirect_url = server_url.to_string().parse::<Url>()?;
+    redirect_url.set_path(REDIRECT_PATH);
+    Ok(redirect_url)
+}
+
 async fn get_sign_in_with_google_url(
     State(state): State<AppState>,
 ) -> Result<Url, SignInWithGoogleError> {
-    let Some(client_id) = state.configuration.client_id else {
-        todo!("Handle sign in with google disabled because optional client id is not configured");
+    let Some(ClientCredentials { id: client_id, .. }) = state.configuration.client_credentials
+    else {
+        return Err(SignInWithGoogleError::NoClientCredentials);
     };
 
     let url = Url::parse("https://accounts.google.com").unwrap();
-    let DiscoveryDocument {
-        mut authorization_endpoint,
-    } = get_discovery_document(&state.client, url).await?;
+
+    let mut authorization_endpoint = state
+        .discovery_cache
+        .get(url)
+        .await?
+        .authorization_endpoint
+        .clone();
 
     ensure_https(&mut authorization_endpoint)?;
 
-    let mut redirect_url = state.configuration.server_url.to_string().parse::<Url>()?;
-    redirect_url.set_path("/redirect");
+    let redirect_url = create_redirect_url(state.configuration.server_url)?;
 
     // Create anti-forgery token
     let antiforgery_token = state.anti_forgery_signer.create_antiforgery_token()?;
@@ -451,15 +426,113 @@ struct AuthenticationResponse {
     scopes: Arc<str>,
 }
 
-async fn redirect(State(state): State<AppState>, Query(response): Query<AuthenticationResponse>) {
+#[derive(thiserror::Error, Debug)]
+enum HandleAuthenticationResponseError {
+    #[error("Invalid anti-forgery token in state parameter")]
+    InvalidAntiForgeryToken,
+    #[error("Failed to get discovery document")]
+    GetDiscoveryDocumentError(#[from] discovery::GetDocumentError),
+    #[error("Failed to ensure url uses https")]
+    EnsureHttpsError(#[from] SetSchemeError),
+    #[error("No client credentials are configured even though authentication response was received which should only be called if client id is configured")]
+    NoClientCredentials,
+    #[error("Failed to create redirect url")]
+    CreateRedirectUrlError(#[from] BadServerUrl),
+    #[error("Failed to send request for access token")]
+    RequestError(#[from] reqwest::Error),
+    #[error("Received response but response indicates an error")]
+    ResponseError(reqwest::Error),
+    #[error("Failed to deserialize response: {0}")]
+    DeserializeError(reqwest::Error),
+}
+
+impl IntoResponse for HandleAuthenticationResponseError {
+    fn into_response(self) -> askama_axum::Response {
+        tracing::error!("Error handling authentication response: {}", self);
+        http::StatusCode::INTERNAL_SERVER_ERROR.into_response()
+    }
+}
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "snake_case")]
+enum GrantType {
+    AuthorizationCode,
+}
+
+#[derive(Serialize, Debug)]
+struct AccessTokenRequest {
+    code: Arc<str>,
+    client_id: Arc<str>,
+    client_secret: Arc<str>,
+    redirect_uri: Url,
+    grant_type: GrantType,
+}
+
+#[derive(Deserialize, Debug)]
+enum TokenType {
+    Bearer,
+}
+
+#[derive(Deserialize, Debug)]
+struct AccessTokenResponse {
+    access_token: Arc<str>,
+    #[serde(rename = "expires_in")]
+    expires_in_seconds: u64,
+    id_token: Arc<str>,
+    token_type: TokenType,
+    refresh_token: Option<Arc<str>>,
+}
+
+async fn handle_authentication_response(
+    State(state): State<AppState>,
+    Query(response): Query<AuthenticationResponse>,
+) -> Result<(), HandleAuthenticationResponseError> {
     tracing::debug!("Received redirect after authentication {:?}", response);
 
-    //TODO this doesn't protect against replay yet
+    // Anti replay protection should come from the code parameter as the IDP won't accept it twice
     if !state.anti_forgery_signer.is_token_valid(response.state) {
         tracing::error!("Invalid anti-forgery token in state parameter");
-        return;
+        return Err(HandleAuthenticationResponseError::InvalidAntiForgeryToken);
     }
+
     tracing::debug!("Anti forgery token is valid");
+
+    let url = Url::parse("https://accounts.google.com").unwrap();
+    // Exchange code for access token
+    let mut token_endpoint = state.discovery_cache.get(url).await?.token_endpoint.clone();
+
+    ensure_https(&mut token_endpoint)?;
+
+    let credentials = state
+        .configuration
+        .client_credentials
+        .ok_or(HandleAuthenticationResponseError::NoClientCredentials)?;
+
+    let request = AccessTokenRequest {
+        code: response.code,
+        client_id: credentials.id,
+        client_secret: credentials.secret,
+        redirect_uri: create_redirect_url(state.configuration.server_url)?,
+        grant_type: GrantType::AuthorizationCode,
+    };
+
+    let response = state
+        .client
+        .post(token_endpoint)
+        .form(&request)
+        .send()
+        .await?
+        .error_for_status()
+        .map_err(HandleAuthenticationResponseError::ResponseError)?;
+
+    let response: AccessTokenResponse = response
+        .json()
+        .await
+        .map_err(HandleAuthenticationResponseError::DeserializeError)?;
+
+    tracing::debug!("Received access token response: {:?}", response);
+
+    Ok(())
 }
 
 pub(crate) fn create_router() -> Router<AppState> {
@@ -471,5 +544,5 @@ pub(crate) fn create_router() -> Router<AppState> {
         .route("/signin/:attempt_id", get(complete_signin))
         .route("/signin/expired", get(sign_in_expired))
         .route("/signout", get(sign_out))
-        .route("/redirect", get(redirect))
+        .route(REDIRECT_PATH, get(handle_authentication_response))
 }

@@ -2,6 +2,7 @@ use std::sync::Arc;
 use std::{env, net::Ipv4Addr, time::Duration};
 
 use crate::routes::survey;
+use auth::open_id_connect::discovery;
 use auth::signer::Signer;
 use axum::http::uri::InvalidUri;
 use axum::{http::Uri, routing::get, Router};
@@ -28,6 +29,10 @@ enum AppError {
 
     #[error("Error reading google client id")]
     ReadClientIdError(env::VarError),
+    #[error("Error reading google client secret")]
+    ReadClientSecretError(env::VarError),
+    #[error("Either google client id or secret is missing")]
+    MissingClientIdOrSecret,
 
     #[error("Could not read anti-forgery signing secret")]
     ReadAntiForgerySigningSecretError(env::VarError),
@@ -71,6 +76,29 @@ async fn main() -> Result<(), AppError> {
         Err(error) => return Err(AppError::ReadClientIdError(error)),
     };
 
+    let client_secret: Option<Arc<str>> = match env::var("GOOGLE_CLIENT_SECRET") {
+        Ok(client_secret) => Some(client_secret.into()),
+        Err(env::VarError::NotPresent) => None,
+        Err(error) => return Err(AppError::ReadClientIdError(error)),
+    };
+
+    // Either need to have both or none
+    let client_credentials = match (client_id, client_secret) {
+        (Some(client_id), Some(client_secret)) => Some(ClientCredentials {
+            id: client_id,
+            secret: client_secret,
+        }),
+        (None, None) => None,
+        _ => {
+            return Err(AppError::MissingClientIdOrSecret);
+        }
+    };
+
+    let configuration = Configuration {
+        server_url: url,
+        client_credentials,
+    };
+
     let signing_secret = env::var("ANTI_FORGERY_SIGNING_SECRET")
         .map_err(AppError::ReadAntiForgerySigningSecretError)?;
     let signing_secret: [u8; 32] = BASE64_URL_SAFE_NO_PAD
@@ -81,17 +109,13 @@ async fn main() -> Result<(), AppError> {
 
     let signer = Signer::new(signing_secret);
 
-    let configuration = Configuration {
-        server_url: url,
-        client_id,
-    };
-
     let client = reqwest::Client::new();
     let app_state = AppState {
         connection,
-        client,
         configuration,
         anti_forgery_signer: signer,
+        discovery_cache: discovery::DocumentCache::new(client.clone()),
+        client,
     };
 
     let auth_routes = auth::create_router();
@@ -118,12 +142,18 @@ async fn main() -> Result<(), AppError> {
 }
 
 #[derive(Clone)]
+struct ClientCredentials {
+    id: Arc<str>,
+    secret: Arc<str>,
+}
+
+#[derive(Clone)]
 pub(crate) struct Configuration {
     /// The server URL under which the server can be reached publicly for clients.
     /// A user clicking an email link will be brought to this URL.
     server_url: Uri,
-    /// Google Auth Platform Client id for OpenID Connect authenticaton flow
-    client_id: Option<Arc<str>>,
+    /// Google Auth Platform Client id and secret for OpenID Connect authenticaton flow
+    client_credentials: Option<ClientCredentials>,
 }
 
 #[derive(Clone)]
@@ -132,6 +162,7 @@ pub(crate) struct AppState {
     client: reqwest::Client,
     configuration: Configuration,
     anti_forgery_signer: Signer,
+    discovery_cache: discovery::DocumentCache,
 }
 
 /// Runs forever and cleans up expired app data about every 5 minutes
