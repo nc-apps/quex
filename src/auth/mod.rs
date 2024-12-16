@@ -638,7 +638,8 @@ async fn handle_authentication_response(
     data.extend_from_slice(user_id);
     let signed_id = state.google_id_signer.sign(&data);
     // Make it safe as a route parameter
-    let signed_id = BASE64_URL_SAFE_NO_PAD.encode(&signed_id);
+    todo!("Add issued at time to invalidate abandoned sign in attempts");
+    let signin_token = BASE64_URL_SAFE_NO_PAD.encode(&signed_id);
 
     const ROUTE: &str = "/signin/complete/";
     const EMAIL_PARAMETER: &str = "?email=";
@@ -647,11 +648,11 @@ async fn handle_authentication_response(
         .email
         .as_ref()
         .map_or(0, |email| EMAIL_PARAMETER.len() + email.len());
-    let mut route = String::with_capacity(ROUTE.len() + signed_id.len() + parameters_length);
+    let mut route = String::with_capacity(ROUTE.len() + signin_token.len() + parameters_length);
     route.push_str(ROUTE);
-    route.push_str(&signed_id);
+    route.push_str(&signin_token);
 
-    // Email does not need to be signed
+    // Email does not need to be signed as that can be changed by the user
     if let Some(email) = &claims.email {
         route.push_str(EMAIL_PARAMETER);
         route.push_str(email);
@@ -666,8 +667,18 @@ struct CompleteSigninTemplate {
     email_address: Option<Arc<str>>,
 }
 
+/// # Possible attack vectors
+/// ## Replaying the url with the signed google account id
+/// If a user already created an account associated with the google id this page is
+/// not valid and they should be returned to the sign in page
+/// ## Getting someones google account id
+/// They can't create a valid link as they can't provide a valid signature. They are returned to sign in.
+/// ## User abandonds the sign in but the link is leaked
+/// This is probably very unlikely as the link is only shared with the user.
+/// An issued at with a server side configured expire duration invalidates abandoned links after some time.
 async fn get_complete_signin_page() -> CompleteSigninTemplate {
     //TODO if someone tries to access this page without a signed id they should be redirected to the sign in page
+
     todo!()
 }
 
