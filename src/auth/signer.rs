@@ -11,6 +11,7 @@ pub(crate) struct AntiforgeryToken(String);
 pub(super) struct CreateAntiforgeryTokenError(#[from] getrandom::Error);
 
 const TOKEN_LENGTH: usize = 62;
+
 #[derive(Clone)]
 pub(crate) struct Signer {
     key: [u8; 32],
@@ -21,7 +22,7 @@ impl Signer {
         Self { key }
     }
 
-    fn sign(&self, data: &[u8]) -> impl AsRef<[u8]> {
+    pub(crate) fn sign(&self, data: &[u8]) -> impl AsRef<[u8]> {
         let mut hmac: Hmac<Sha256> =
             Hmac::<Sha256>::new_from_slice(&self.key).expect("HMAC key should be 32 bytes");
         hmac.update(data);
@@ -30,15 +31,36 @@ impl Signer {
         result
     }
 
+    pub(crate) fn validate(&self, data: &[u8], signature: &[u8; 32]) -> bool {
+        let mut hmac: Hmac<Sha256> =
+            Hmac::<Sha256>::new_from_slice(&self.key).expect("HMAC key should be 32 bytes");
+
+        hmac.update(data);
+        hmac.verify_slice(signature).is_ok()
+    }
+}
+
+#[derive(Clone)]
+pub(crate) struct AntifForgeryTokenProvider {
+    signer: Signer,
+}
+
+const SIGNATURE_LENGTH: usize = 32;
+impl AntifForgeryTokenProvider {
+    pub(crate) fn new(signer: Signer) -> Self {
+        Self { signer }
+    }
+
     pub(super) fn create_antiforgery_token(
         &self,
     ) -> Result<AntiforgeryToken, CreateAntiforgeryTokenError> {
         let mut token = [0; TOKEN_LENGTH];
-        let mut unique = &mut token[..30];
-        getrandom::getrandom(&mut unique)?;
-        let signature = self.sign(&unique);
 
-        token[30..].copy_from_slice(signature.as_ref());
+        let mut unique = &mut token[SIGNATURE_LENGTH..];
+        getrandom::getrandom(&mut unique)?;
+        let signature = self.signer.sign(&unique);
+
+        token[..SIGNATURE_LENGTH].copy_from_slice(signature.as_ref());
 
         Ok(AntiforgeryToken(BASE64_URL_SAFE_NO_PAD.encode(&token)))
     }
@@ -50,10 +72,9 @@ impl Signer {
             return false;
         }
 
-        let mut hmac: Hmac<Sha256> =
-            Hmac::<Sha256>::new_from_slice(&self.key).expect("HMAC key should be 32 bytes");
-
-        hmac.update(&token_bytes[..30]);
-        hmac.verify_slice(&token_bytes[30..]).is_ok()
+        self.signer.validate(
+            &token_bytes[SIGNATURE_LENGTH..],
+            &token_bytes[..SIGNATURE_LENGTH].try_into().unwrap(),
+        )
     }
 }

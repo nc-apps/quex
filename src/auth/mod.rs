@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{ptr::write, sync::Arc};
 
 use crate::{
     email::{send_sign_in_email, Email},
@@ -407,7 +407,9 @@ async fn get_sign_in_with_google_url(
     let redirect_url = create_redirect_url(state.configuration.server_url)?;
 
     // Create anti-forgery token
-    let antiforgery_token = state.anti_forgery_signer.create_antiforgery_token()?;
+    let antiforgery_token = state
+        .anti_forgery_token_provider
+        .create_antiforgery_token()?;
     let request = AuthenticationRequest {
         client_id: client_id.as_ref(),
         nonce: Nonce::new(),
@@ -451,6 +453,8 @@ enum HandleAuthenticationResponseError {
     DeserializeError(reqwest::Error),
     #[error("Failed to validate id token: {0}")]
     VerifyIdTokenError(#[from] ValidateIdTokenError),
+    #[error("Error creating salt for user id signing: {0}")]
+    CreateSaltError(#[from] getrandom::Error),
 }
 
 impl IntoResponse for HandleAuthenticationResponseError {
@@ -517,7 +521,7 @@ enum GoogleIssuer {
 }
 
 #[derive(Deserialize, Debug)]
-struct Claims<I> {
+struct Claims {
     #[serde(rename = "aud")]
     audience: Arc<str>,
     #[serde(
@@ -531,9 +535,12 @@ struct Claims<I> {
     )]
     issued_at: OffsetDateTime,
     #[serde(rename = "iss")]
-    issuer: I,
+    issuer: GoogleIssuer,
     #[serde(rename = "sub")]
     subject: Arc<str>,
+    email: Option<Arc<str>>,
+    #[serde(rename = "email_verified")]
+    is_email_verified: Option<bool>,
 }
 
 async fn validate_id_token(
@@ -541,7 +548,7 @@ async fn validate_id_token(
     client: &reqwest::Client,
     mut jwks_uri: Url,
     client_id: &str,
-) -> Result<Claims<GoogleIssuer>, ValidateIdTokenError> {
+) -> Result<Claims, ValidateIdTokenError> {
     ensure_https(&mut jwks_uri)?;
     // jsonwebtoken::jwk::Jwk
     let response = client.get(jwks_uri).send().await?.error_for_status()?;
@@ -556,7 +563,7 @@ async fn validate_id_token(
     let mut validation = Validation::new(header.alg);
     validation.set_audience(&[client_id]);
 
-    let data = jsonwebtoken::decode::<Claims<GoogleIssuer>>(id_token, &decoding_key, &validation)
+    let data = jsonwebtoken::decode::<Claims>(id_token, &decoding_key, &validation)
         .map_err(ValidateIdTokenError::ValidationError)?;
 
     Ok(data.claims)
@@ -565,11 +572,14 @@ async fn validate_id_token(
 async fn handle_authentication_response(
     State(state): State<AppState>,
     Query(response): Query<AuthenticationResponse>,
-) -> Result<(), HandleAuthenticationResponseError> {
+) -> Result<Redirect, HandleAuthenticationResponseError> {
     tracing::debug!("Received redirect after authentication {:?}", response);
 
     // Anti replay protection should come from the code parameter as the IDP won't accept it twice
-    if !state.anti_forgery_signer.is_token_valid(response.state) {
+    if !state
+        .anti_forgery_token_provider
+        .is_token_valid(response.state)
+    {
         tracing::error!("Invalid anti-forgery token in state parameter");
         return Err(HandleAuthenticationResponseError::InvalidAntiForgeryToken);
     }
@@ -616,9 +626,49 @@ async fn handle_authentication_response(
     let claims =
         validate_id_token(&response.id_token, &state.client, keys_url, &credentials.id).await?;
 
+    // Return a page with containing the name if it was present in the id token
     tracing::debug!("Claims: {:?}", claims);
 
-    Ok(())
+    // Sign user id to prevent others from creating accounts for unauthorized google accounts
+    let user_id = claims.subject.as_bytes();
+    // Add salt to increase entropy to avoid rainbow attacks
+    const SALT_LENGTH: usize = 16;
+    let mut data = Vec::with_capacity(SALT_LENGTH + user_id.len());
+    getrandom(&mut data[..SALT_LENGTH])?;
+    data.extend_from_slice(user_id);
+    let signed_id = state.google_id_signer.sign(&data);
+    // Make it safe as a route parameter
+    let signed_id = BASE64_URL_SAFE_NO_PAD.encode(&signed_id);
+
+    const ROUTE: &str = "/signin/complete/";
+    const EMAIL_PARAMETER: &str = "?email=";
+    // Are allowed email address characters also allowed in a URL?
+    let parameters_length = claims
+        .email
+        .as_ref()
+        .map_or(0, |email| EMAIL_PARAMETER.len() + email.len());
+    let mut route = String::with_capacity(ROUTE.len() + signed_id.len() + parameters_length);
+    route.push_str(ROUTE);
+    route.push_str(&signed_id);
+
+    // Email does not need to be signed
+    if let Some(email) = &claims.email {
+        route.push_str(EMAIL_PARAMETER);
+        route.push_str(email);
+    }
+
+    Ok(Redirect::to(&route))
+}
+
+#[derive(Template)]
+#[template(path = "auth/complete_signin.html")]
+struct CompleteSigninTemplate {
+    email_address: Option<Arc<str>>,
+}
+
+async fn get_complete_signin_page() -> CompleteSigninTemplate {
+    //TODO if someone tries to access this page without a signed id they should be redirected to the sign in page
+    todo!()
 }
 
 pub(crate) fn create_router() -> Router<AppState> {
@@ -630,5 +680,9 @@ pub(crate) fn create_router() -> Router<AppState> {
         .route("/signin/:attempt_id", get(complete_signin))
         .route("/signin/expired", get(sign_in_expired))
         .route("/signout", get(sign_out))
+        .route(
+            "/signin/complete/:google_user_id",
+            get(get_complete_signin_page),
+        )
         .route(REDIRECT_PATH, get(handle_authentication_response))
 }

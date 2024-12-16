@@ -3,7 +3,7 @@ use std::{env, net::Ipv4Addr, time::Duration};
 
 use crate::routes::survey;
 use auth::open_id_connect::discovery;
-use auth::signer::Signer;
+use auth::signer::{AntifForgeryTokenProvider, Signer};
 use axum::http::uri::InvalidUri;
 use axum::{http::Uri, routing::get, Router};
 use base64::prelude::BASE64_URL_SAFE_NO_PAD;
@@ -20,6 +20,27 @@ mod email;
 mod routes;
 
 #[derive(thiserror::Error, Debug)]
+enum SigningSecretError {
+    #[error("Error reading signing secret")]
+    ReadError(env::VarError),
+    #[error("Error decoding signing secret")]
+    DecodeError(base64::DecodeError),
+    #[error("Signing secret is not 32 bytes long")]
+    LengthError,
+}
+
+fn read_signing_secret(variable_name: &str) -> Result<Signer, SigningSecretError> {
+    let secret = env::var(variable_name).map_err(SigningSecretError::ReadError)?;
+    let secret: [u8; 32] = BASE64_URL_SAFE_NO_PAD
+        .decode(secret)
+        .map_err(SigningSecretError::DecodeError)?
+        .try_into()
+        .map_err(|_| SigningSecretError::LengthError)?;
+
+    Ok(Signer::new(secret))
+}
+
+#[derive(thiserror::Error, Debug)]
 enum AppError {
     #[error("No quex url was configured with environment variables or there was an error reading it. {0}")]
     NoUrlConfigured(env::VarError),
@@ -31,17 +52,14 @@ enum AppError {
     ReadClientIdError(env::VarError),
     #[error("Error reading google client secret")]
     ReadClientSecretError(env::VarError),
+
     #[error("Either google client id or secret is missing")]
     MissingClientIdOrSecret,
 
-    #[error("Could not read anti-forgery signing secret")]
-    ReadAntiForgerySigningSecretError(env::VarError),
-
-    #[error("Error decoding anti-forgery signing secret")]
-    DecodeAntiForgerySigningSecretError(base64::DecodeError),
-
-    #[error("Anti-forgery signing secret is not 32 bytes long")]
-    AntiForgerySigningSecretLengthError,
+    #[error("Error reading anti forgery token signing secret")]
+    AntiForgerySecretError(SigningSecretError),
+    #[error("Error reading google user id signing secret")]
+    GoogleUserIdSigningSecretError(SigningSecretError),
 }
 
 #[tokio::main]
@@ -79,7 +97,7 @@ async fn main() -> Result<(), AppError> {
     let client_secret: Option<Arc<str>> = match env::var("GOOGLE_CLIENT_SECRET") {
         Ok(client_secret) => Some(client_secret.into()),
         Err(env::VarError::NotPresent) => None,
-        Err(error) => return Err(AppError::ReadClientIdError(error)),
+        Err(error) => return Err(AppError::ReadClientSecretError(error)),
     };
 
     // Either need to have both or none
@@ -99,23 +117,21 @@ async fn main() -> Result<(), AppError> {
         client_credentials,
     };
 
-    let signing_secret = env::var("ANTI_FORGERY_SIGNING_SECRET")
-        .map_err(AppError::ReadAntiForgerySigningSecretError)?;
-    let signing_secret: [u8; 32] = BASE64_URL_SAFE_NO_PAD
-        .decode(signing_secret)
-        .map_err(AppError::DecodeAntiForgerySigningSecretError)?
-        .try_into()
-        .map_err(|_| AppError::AntiForgerySigningSecretLengthError)?;
+    let signer = read_signing_secret("ANTI_FORGERY_SIGNING_SECRET")
+        .map_err(AppError::AntiForgerySecretError)?;
+    let anti_forgery_token_provider = AntifForgeryTokenProvider::new(signer);
 
-    let signer = Signer::new(signing_secret);
+    let google_id_signer = read_signing_secret("GOOGLE_ID_SIGNING_SECRET")
+        .map_err(AppError::GoogleUserIdSigningSecretError)?;
 
     let client = reqwest::Client::new();
     let app_state = AppState {
         connection,
         configuration,
-        anti_forgery_signer: signer,
+        anti_forgery_token_provider,
         discovery_cache: discovery::DocumentCache::new(client.clone()),
         client,
+        google_id_signer,
     };
 
     let auth_routes = auth::create_router();
@@ -161,8 +177,9 @@ pub(crate) struct AppState {
     connection: Connection,
     client: reqwest::Client,
     configuration: Configuration,
-    anti_forgery_signer: Signer,
+    anti_forgery_token_provider: AntifForgeryTokenProvider,
     discovery_cache: discovery::DocumentCache,
+    google_id_signer: Signer,
 }
 
 /// Runs forever and cleans up expired app data about every 5 minutes
