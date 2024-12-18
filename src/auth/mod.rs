@@ -26,7 +26,7 @@ use libsql::named_params;
 use nanoid::nanoid;
 use open_id_connect::discovery;
 use serde::{Deserialize, Serialize};
-use signer::{AntiforgeryToken, CreateAntiforgeryTokenError};
+use signer::{AntiforgeryToken, CreateAntiforgeryTokenError, Signer};
 use time::OffsetDateTime;
 use url::Url;
 
@@ -569,6 +569,45 @@ async fn validate_id_token(
     Ok(data.claims)
 }
 
+struct CompleteSignInToken {
+    user_id: Arc<str>,
+    issued_at: OffsetDateTime,
+}
+
+#[derive(thiserror::Error, Debug)]
+enum EncodeTokenError {
+    #[error("Error creating salt for complete sign in token signing: {0}")]
+    CreateSaltError(#[from] getrandom::Error),
+}
+
+enum DecodeTokenError {}
+impl CompleteSignInToken {
+    fn new(user_id: Arc<str>) -> Self {
+        let issued_at = OffsetDateTime::now_utc();
+        Self { user_id, issued_at }
+    }
+
+    fn try_encode(&self, signer: &Signer) -> Result<String, EncodeTokenError> {
+        // Sign user id to prevent others from creating accounts for unauthorized google accounts
+        let user_id = self.user_id.as_bytes();
+        let issued_at = self.issued_at.unix_timestamp().to_be_bytes();
+        // Only unknown size is the user id
+        let mut data = Vec::with_capacity(SALT_LENGTH + issued_at.len() + user_id.len());
+        getrandom(&mut data[..SALT_LENGTH])?;
+        data.extend_from_slice(&issued_at);
+        data.extend_from_slice(user_id);
+        let signed_token = signer.sign(&data);
+
+        Ok(BASE64_URL_SAFE_NO_PAD.encode(signed_token))
+    }
+
+    fn try_decode() -> Result<Self, DecodeTokenError> {
+        //TODO implement
+        todo!()
+    }
+}
+
+const SALT_LENGTH: usize = 16;
 async fn handle_authentication_response(
     State(state): State<AppState>,
     Query(response): Query<AuthenticationResponse>,
@@ -631,14 +670,17 @@ async fn handle_authentication_response(
 
     // Sign user id to prevent others from creating accounts for unauthorized google accounts
     let user_id = claims.subject.as_bytes();
+
+    // Add time to invalidate abandoned sign in attempts
+    let issued_at = OffsetDateTime::now_utc().unix_timestamp().to_be_bytes();
+
+    // Only unknown size is the user id
+    let mut data = Vec::with_capacity(SALT_LENGTH + issued_at.len() + user_id.len());
     // Add salt to increase entropy to avoid rainbow attacks
-    const SALT_LENGTH: usize = 16;
-    let mut data = Vec::with_capacity(SALT_LENGTH + user_id.len());
     getrandom(&mut data[..SALT_LENGTH])?;
     data.extend_from_slice(user_id);
     let signed_id = state.google_id_signer.sign(&data);
     // Make it safe as a route parameter
-    todo!("Add issued at time to invalidate abandoned sign in attempts");
     let signin_token = BASE64_URL_SAFE_NO_PAD.encode(&signed_id);
 
     const ROUTE: &str = "/signin/complete/";
@@ -661,9 +703,30 @@ async fn handle_authentication_response(
     Ok(Redirect::to(&route))
 }
 
+#[derive(thiserror::Error, Debug)]
+enum CompleteSignInError {
+    #[error("Failed to decode base64: {0}")]
+    BadTokenEncoding(#[from] base64::DecodeError),
+    #[error("Bad token length")]
+    BadTokenLength { expected: usize, actual: usize },
+}
+
+impl IntoResponse for CompleteSignInError {
+    fn into_response(self) -> askama_axum::Response {
+        tracing::error!("Error getting complete sign in page: {}", self);
+        http::StatusCode::INTERNAL_SERVER_ERROR.into_response()
+    }
+}
+
 #[derive(Template)]
 #[template(path = "auth/complete_signin.html")]
 struct CompleteSigninTemplate {
+    email_address: Option<Arc<str>>,
+}
+
+#[derive(Deserialize, Debug)]
+struct CompleteSigninRequest {
+    #[serde(rename = "email")]
     email_address: Option<Arc<str>>,
 }
 
@@ -676,10 +739,19 @@ struct CompleteSigninTemplate {
 /// ## User abandonds the sign in but the link is leaked
 /// This is probably very unlikely as the link is only shared with the user.
 /// An issued at with a server side configured expire duration invalidates abandoned links after some time.
-async fn get_complete_signin_page() -> CompleteSigninTemplate {
-    //TODO if someone tries to access this page without a signed id they should be redirected to the sign in page
+async fn get_complete_signin_page(
+    Path(sign_in_token): Path<Arc<[u8]>>,
+    Query(query): Query<CompleteSigninRequest>,
+) -> Result<CompleteSigninTemplate, CompleteSignInError> {
+    let data = BASE64_URL_SAFE_NO_PAD.decode(sign_in_token)?;
+    let timestamp = &data.get(SALT_LENGTH..SALT_LENGTH + 8).ok_or(err);
 
-    todo!()
+    // OffsetDateTime::from_unix_timestamp(timestamp);
+
+    //TODO if someone tries to access this page without a signed id they should be redirected to the sign in page
+    Ok(CompleteSigninTemplate {
+        email_address: query.email_address,
+    })
 }
 
 pub(crate) fn create_router() -> Router<AppState> {
@@ -692,7 +764,7 @@ pub(crate) fn create_router() -> Router<AppState> {
         .route("/signin/expired", get(sign_in_expired))
         .route("/signout", get(sign_out))
         .route(
-            "/signin/complete/:google_user_id",
+            "/signin/complete/:signin_token",
             get(get_complete_signin_page),
         )
         .route(REDIRECT_PATH, get(handle_authentication_response))
