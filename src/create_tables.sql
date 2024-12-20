@@ -6,6 +6,12 @@ CREATE TABLE IF NOT EXISTS users (
     email_address TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS google_account_connections (
+    google_user_id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    FOREIGN KEY(user_id) REFERENCES users(id)
+);
+
 CREATE TABLE IF NOT EXISTS system_usability_score_surveys (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,

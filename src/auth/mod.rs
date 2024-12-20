@@ -19,10 +19,7 @@ use axum_extra::extract::{
 };
 use base64::{prelude::BASE64_URL_SAFE_NO_PAD, Engine};
 use getrandom::getrandom;
-use jsonwebtoken::{
-    jwk::JwkSet,
-    DecodingKey, Validation,
-};
+use jsonwebtoken::{jwk::JwkSet, DecodingKey, Validation};
 use libsql::named_params;
 use nanoid::nanoid;
 use open_id_connect::discovery;
@@ -456,6 +453,8 @@ enum HandleAuthenticationResponseError {
     VerifyIdTokenError(#[from] ValidateIdTokenError),
     #[error("Error creating complete sign in token: {0}")]
     EncodeTokenError(#[from] EncodeTokenError),
+    #[error("Error checking for existing user: {0}")]
+    GetUserError(#[from] libsql::Error),
 }
 
 impl IntoResponse for HandleAuthenticationResponseError {
@@ -542,6 +541,7 @@ struct Claims {
     email: Option<Arc<str>>,
     #[serde(rename = "email_verified")]
     is_email_verified: Option<bool>,
+    name: Option<Arc<str>>,
 }
 
 async fn validate_id_token(
@@ -660,6 +660,7 @@ impl CompleteSignInToken {
 
 async fn handle_authentication_response(
     State(state): State<AppState>,
+    jar: CookieJar,
     Query(response): Query<AuthenticationResponse>,
 ) -> Result<Redirect, HandleAuthenticationResponseError> {
     tracing::debug!("Received redirect after authentication {:?}", response);
@@ -709,14 +710,24 @@ async fn handle_authentication_response(
         .await
         .map_err(HandleAuthenticationResponseError::DeserializeError)?;
 
-    tracing::debug!("Received access token response: {:?}", response);
-
     let keys_url = discovery_document.jwks_uri.clone();
     let claims =
         validate_id_token(&response.id_token, &state.client, keys_url, &credentials.id).await?;
 
-    // Return a page with containing the name if it was present in the id token
-    tracing::debug!("Claims: {:?}", claims);
+    // Check if user already exists
+    let mut rows = state
+        .connection
+        .query(
+            "SELECT user_id FROM google_connections WHERE id = :id",
+            named_params![":id": claims.subject],
+        )
+        .await?;
+
+    let row = rows.next().await?;
+    let existing_user_id = row.map(|row| row.get::<String>(0)).transpose()?;
+    if let Some(existing_user_id) = existing_user_id {
+        todo!("Set cookie")
+    }
 
     let token = CompleteSignInToken::new(claims.subject);
     let signin_token = token.try_encode(&state.google_id_signer)?;
@@ -817,6 +828,8 @@ async fn get_complete_signin_page(
         email_address: query.email_address,
     })
 }
+
+// async fn complete_signup()
 
 pub(crate) fn create_router() -> Router<AppState> {
     Router::new()
