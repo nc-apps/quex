@@ -1,4 +1,4 @@
-use std::{ptr::write, sync::Arc};
+use std::sync::Arc;
 
 use crate::{
     email::{send_sign_in_email, Email},
@@ -6,8 +6,9 @@ use crate::{
 };
 use askama_axum::{IntoResponse, Template};
 use axum::{
-    extract::{Path, Query, State},
-    http::{self, Uri},
+    async_trait,
+    extract::{rejection::PathRejection, FromRequestParts, Path, Query, State},
+    http::{self, request::Parts, Uri},
     response::Redirect,
     routing::get,
     Form, Router,
@@ -19,7 +20,7 @@ use axum_extra::extract::{
 use base64::{prelude::BASE64_URL_SAFE_NO_PAD, Engine};
 use getrandom::getrandom;
 use jsonwebtoken::{
-    jwk::{Jwk, JwkSet},
+    jwk::JwkSet,
     DecodingKey, Validation,
 };
 use libsql::named_params;
@@ -27,7 +28,7 @@ use nanoid::nanoid;
 use open_id_connect::discovery;
 use serde::{Deserialize, Serialize};
 use signer::{AntiforgeryToken, CreateAntiforgeryTokenError, Signer};
-use time::OffsetDateTime;
+use time::{Duration, OffsetDateTime};
 use url::Url;
 
 use self::authenticated_user::AuthenticatedUser;
@@ -453,8 +454,8 @@ enum HandleAuthenticationResponseError {
     DeserializeError(reqwest::Error),
     #[error("Failed to validate id token: {0}")]
     VerifyIdTokenError(#[from] ValidateIdTokenError),
-    #[error("Error creating salt for user id signing: {0}")]
-    CreateSaltError(#[from] getrandom::Error),
+    #[error("Error creating complete sign in token: {0}")]
+    EncodeTokenError(#[from] EncodeTokenError),
 }
 
 impl IntoResponse for HandleAuthenticationResponseError {
@@ -569,19 +570,39 @@ async fn validate_id_token(
     Ok(data.claims)
 }
 
-struct CompleteSignInToken {
-    user_id: Arc<str>,
-    issued_at: OffsetDateTime,
-}
-
 #[derive(thiserror::Error, Debug)]
 enum EncodeTokenError {
     #[error("Error creating salt for complete sign in token signing: {0}")]
     CreateSaltError(#[from] getrandom::Error),
 }
 
-enum DecodeTokenError {}
+#[derive(thiserror::Error, Debug)]
+enum DecodeTokenError {
+    #[error("Error decoding base64: {0}")]
+    DecodeError(#[from] base64::DecodeError),
+    #[error("Bad token length")]
+    BadTokenLength {
+        mininum_expected: usize,
+        actual: usize,
+    },
+    #[error("Bad timestamp: {0}")]
+    BadTimestamp(#[from] time::error::ComponentRange),
+    #[error("Bad token encoding: {0}")]
+    BadTokenEncoding(#[from] core::str::Utf8Error),
+    /// Google ensures as per documentation that the user id is ASCII
+    #[error("User is is not ASCII")]
+    NonAsciiUserId,
+}
+
+struct CompleteSignInToken {
+    user_id: Arc<str>,
+    issued_at: OffsetDateTime,
+}
+
 impl CompleteSignInToken {
+    const TIMESTAMP_LENGTH: usize = size_of::<i64>();
+    const SALT_LENGTH: usize = 16;
+
     fn new(user_id: Arc<str>) -> Self {
         let issued_at = OffsetDateTime::now_utc();
         Self { user_id, issued_at }
@@ -592,8 +613,9 @@ impl CompleteSignInToken {
         let user_id = self.user_id.as_bytes();
         let issued_at = self.issued_at.unix_timestamp().to_be_bytes();
         // Only unknown size is the user id
-        let mut data = Vec::with_capacity(SALT_LENGTH + issued_at.len() + user_id.len());
-        getrandom(&mut data[..SALT_LENGTH])?;
+        let mut data =
+            Vec::with_capacity(Self::SALT_LENGTH + Self::TIMESTAMP_LENGTH + user_id.len());
+        getrandom(&mut data[..Self::SALT_LENGTH])?;
         data.extend_from_slice(&issued_at);
         data.extend_from_slice(user_id);
         let signed_token = signer.sign(&data);
@@ -601,13 +623,41 @@ impl CompleteSignInToken {
         Ok(BASE64_URL_SAFE_NO_PAD.encode(signed_token))
     }
 
-    fn try_decode() -> Result<Self, DecodeTokenError> {
+    fn try_decode(data: impl AsRef<[u8]>) -> Result<Self, DecodeTokenError> {
         //TODO implement
-        todo!()
+        let decoded = BASE64_URL_SAFE_NO_PAD.decode(data)?;
+
+        let timestamp = decoded
+            .get(Self::SALT_LENGTH..Self::SALT_LENGTH + Self::TIMESTAMP_LENGTH)
+            .ok_or(DecodeTokenError::BadTokenLength {
+                // User id is minimum one byte long
+                mininum_expected: Self::SALT_LENGTH + Self::TIMESTAMP_LENGTH + 1,
+                actual: decoded.len(),
+            })?;
+
+        let timestamp = i64::from_be_bytes(timestamp.try_into().expect("Expected 8 bytes"));
+        let issued_at = OffsetDateTime::from_unix_timestamp(timestamp)?;
+
+        let user_id = decoded
+            .get(Self::SALT_LENGTH + Self::TIMESTAMP_LENGTH..)
+            .ok_or(DecodeTokenError::BadTokenLength {
+                mininum_expected: Self::SALT_LENGTH + Self::TIMESTAMP_LENGTH + 1,
+                actual: decoded.len(),
+            })?;
+
+        let user_id = core::str::from_utf8(user_id)?;
+
+        if !user_id.is_ascii() {
+            return Err(DecodeTokenError::NonAsciiUserId);
+        }
+
+        Ok(Self {
+            user_id: Arc::from(user_id),
+            issued_at,
+        })
     }
 }
 
-const SALT_LENGTH: usize = 16;
 async fn handle_authentication_response(
     State(state): State<AppState>,
     Query(response): Query<AuthenticationResponse>,
@@ -668,20 +718,8 @@ async fn handle_authentication_response(
     // Return a page with containing the name if it was present in the id token
     tracing::debug!("Claims: {:?}", claims);
 
-    // Sign user id to prevent others from creating accounts for unauthorized google accounts
-    let user_id = claims.subject.as_bytes();
-
-    // Add time to invalidate abandoned sign in attempts
-    let issued_at = OffsetDateTime::now_utc().unix_timestamp().to_be_bytes();
-
-    // Only unknown size is the user id
-    let mut data = Vec::with_capacity(SALT_LENGTH + issued_at.len() + user_id.len());
-    // Add salt to increase entropy to avoid rainbow attacks
-    getrandom(&mut data[..SALT_LENGTH])?;
-    data.extend_from_slice(user_id);
-    let signed_id = state.google_id_signer.sign(&data);
-    // Make it safe as a route parameter
-    let signin_token = BASE64_URL_SAFE_NO_PAD.encode(&signed_id);
+    let token = CompleteSignInToken::new(claims.subject);
+    let signin_token = token.try_encode(&state.google_id_signer)?;
 
     const ROUTE: &str = "/signin/complete/";
     const EMAIL_PARAMETER: &str = "?email=";
@@ -704,11 +742,38 @@ async fn handle_authentication_response(
 }
 
 #[derive(thiserror::Error, Debug)]
+enum DecodeTokenRejection {
+    #[error("Failed to get path parameter")]
+    CreatePathError(#[from] PathRejection),
+    #[error("Failed to decode token")]
+    DecodeError(#[from] DecodeTokenError),
+}
+impl IntoResponse for DecodeTokenRejection {
+    fn into_response(self) -> askama_axum::Response {
+        tracing::error!("Error decoding token: {}", self);
+        //TODO redirect user
+        http::StatusCode::BAD_REQUEST.into_response()
+    }
+}
+
+#[async_trait]
+impl<S> FromRequestParts<S> for CompleteSignInToken
+where
+    S: Send + Sync,
+{
+    type Rejection = DecodeTokenRejection;
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        let Path(signin_token) = Path::<Arc<[u8]>>::from_request_parts(parts, state).await?;
+        let token = CompleteSignInToken::try_decode(signin_token)?;
+        Ok(token)
+    }
+}
+
+#[derive(thiserror::Error, Debug)]
 enum CompleteSignInError {
-    #[error("Failed to decode base64: {0}")]
-    BadTokenEncoding(#[from] base64::DecodeError),
-    #[error("Bad token length")]
-    BadTokenLength { expected: usize, actual: usize },
+    #[error("Signin token and link is expired")]
+    Expired,
 }
 
 impl IntoResponse for CompleteSignInError {
@@ -738,17 +803,16 @@ struct CompleteSigninRequest {
 /// They can't create a valid link as they can't provide a valid signature. They are returned to sign in.
 /// ## User abandonds the sign in but the link is leaked
 /// This is probably very unlikely as the link is only shared with the user.
-/// An issued at with a server side configured expire duration invalidates abandoned links after some time.
+/// An "issued at" value with a expire duration invalidates abandoned links after some time.
 async fn get_complete_signin_page(
-    Path(sign_in_token): Path<Arc<[u8]>>,
+    token: CompleteSignInToken,
     Query(query): Query<CompleteSigninRequest>,
 ) -> Result<CompleteSigninTemplate, CompleteSignInError> {
-    let data = BASE64_URL_SAFE_NO_PAD.decode(sign_in_token)?;
-    let timestamp = &data.get(SALT_LENGTH..SALT_LENGTH + 8).ok_or(err);
+    let expires_at = token.issued_at + Duration::minutes(15);
+    if expires_at < OffsetDateTime::now_utc() {
+        return Err(CompleteSignInError::Expired);
+    }
 
-    // OffsetDateTime::from_unix_timestamp(timestamp);
-
-    //TODO if someone tries to access this page without a signed id they should be redirected to the sign in page
     Ok(CompleteSigninTemplate {
         email_address: query.email_address,
     })

@@ -36,7 +36,7 @@ where
         };
 
         let session_id = cookie.value();
-        // TODO use stateful cookies to reduce round trips to the database
+        // TODO use stateful signed cookies to reduce round trips to the database
         let state = AppState::from_ref(state);
         let mut rows = state
             .connection
