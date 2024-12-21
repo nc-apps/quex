@@ -13,10 +13,7 @@ use axum::{
     routing::get,
     Form, Router,
 };
-use axum_extra::extract::{
-    cookie::{Cookie, SameSite},
-    CookieJar,
-};
+use axum_extra::extract::{cookie::SameSite, SignedCookieJar};
 use base64::{prelude::BASE64_URL_SAFE_NO_PAD, Engine};
 use getrandom::getrandom;
 use jsonwebtoken::{jwk::JwkSet, DecodingKey, Validation};
@@ -31,11 +28,10 @@ use url::Url;
 use self::authenticated_user::AuthenticatedUser;
 
 pub(crate) mod authenticated_user;
+pub(crate) mod cookie;
 pub(crate) mod open_id_connect;
 pub(crate) mod signer;
 
-//TODO decide how long a session should live
-const SESSION_LIFETIME: time::Duration = time::Duration::days(30);
 const SIGNIN_ATTEMPT_LIFETIME: time::Duration = time::Duration::minutes(15);
 
 #[derive(Deserialize, Debug)]
@@ -97,10 +93,11 @@ async fn create_account(
 
 async fn complete_signin(
     State(AppState { connection, .. }): State<AppState>,
-    jar: CookieJar,
+    jar: SignedCookieJar,
     Path(attempt_id): Path<String>,
 ) -> impl IntoResponse {
     // Check if sign in attempt exists
+    //TODO remove database round trips with signed value and expiration time
     let mut rows = connection
         .query(
             "SELECT user_id, expires_at_utc FROM signin_attempts WHERE id = :id",
@@ -130,33 +127,24 @@ async fn complete_signin(
         .await
         .unwrap();
 
-    // Create session
-    let session_id = nanoid!();
-    let expires_at = time::OffsetDateTime::now_utc() + SESSION_LIFETIME;
-
-    connection
-        .execute(
-            "INSERT INTO sessions (id, user_id, expires_at_utc) VALUES (:id, :user_id, :expires_at_utc)",
-            named_params![
-                ":id": session_id.clone(),
-                ":user_id": user_id,
-                ":expires_at_utc": expires_at.unix_timestamp(),
-            ],
-        )
-        .await
-        .unwrap();
-
     // Set session cookie
     // The cookie does not need to be encrypted as it doesn't contain any sensitive information
-    let cookie = Cookie::build(("session", session_id))
+    let cookie_builder = match cookie::Session::build(Arc::from(user_id)) {
+        Ok(builder) => builder,
+        Err(error) => {
+            tracing::error!("Error building cookie: {}", error);
+            return Redirect::to("/").into_response();
+        }
+    };
+
+    let cookie = cookie_builder
         .path("/")
         .secure(true)
         // Tell browsers to not allow JavaScript to access the cookie. Prevents some XSS attacks
         // (JS can still indirectly find out if user is authenticated by trying to access authenticated endpoints)
         .http_only(true)
         // Prevents CRSF attack
-        .same_site(SameSite::Strict)
-        .expires(expires_at);
+        .same_site(SameSite::Strict);
 
     (jar.add(cookie), Redirect::to("/surveys")).into_response()
 }
@@ -295,9 +283,9 @@ async fn sign_in_expired() -> impl IntoResponse {
     sign_in_expired_template
 }
 
-async fn sign_out(jar: CookieJar) -> (CookieJar, Redirect) {
+async fn sign_out(jar: SignedCookieJar) -> (SignedCookieJar, Redirect) {
     // This should be a no-op if the cookie doesn't exist
-    (jar.remove("session"), Redirect::to("/"))
+    (jar.remove(cookie::NAME), Redirect::to("/"))
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -660,7 +648,7 @@ impl CompleteSignInToken {
 
 async fn handle_authentication_response(
     State(state): State<AppState>,
-    jar: CookieJar,
+    jar: SignedCookieJar,
     Query(response): Query<AuthenticationResponse>,
 ) -> Result<Redirect, HandleAuthenticationResponseError> {
     tracing::debug!("Received redirect after authentication {:?}", response);

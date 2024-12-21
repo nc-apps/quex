@@ -10,7 +10,7 @@ askama_axum = "0.4.0"
 # Web server framework
 axum = "0.7.5"
 # Useful utilities like cookies
-axum-extra = { version = "0.9.3", features = ["cookie"] }
+axum-extra = { version = "0.9.3", features = ["cookie-signed"] }
 # Binary encoding/decoding
 base64 = "0.22.1"
 # For environment variables
@@ -48,3 +48,7 @@ hmac = "0.12.1"
 sha2 = "0.10.8"
 # For validating identity tokens for OpenID Connect
 jsonwebtoken = "9.3.0"
+# More efficient serialization/deserialization format than JSON used in our stateful cookies
+postcard = { version = "1.1.1", default-features = false, features = ["alloc"] }
+# Helpful for baking cookies
+cookie = "0.18.1"

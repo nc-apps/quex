@@ -2,6 +2,7 @@ use std::sync::Arc;
 use std::{env, net::Ipv4Addr, time::Duration};
 
 use crate::routes::survey;
+use auth::cookie::{self};
 use auth::open_id_connect::discovery;
 use auth::signer::{AntifForgeryTokenProvider, Signer};
 use axum::http::uri::InvalidUri;
@@ -9,6 +10,7 @@ use axum::{http::Uri, routing::get, Router};
 use base64::prelude::BASE64_URL_SAFE_NO_PAD;
 use base64::Engine;
 use dotenvy::dotenv;
+use getrandom::getrandom;
 use libsql::{named_params, Connection};
 use tokio::signal;
 use tower_http::services::ServeDir;
@@ -26,8 +28,8 @@ enum SigningSecretError {
     ReadError(env::VarError),
     #[error("Error decoding signing secret")]
     DecodeError(base64::DecodeError),
-    #[error("Signing secret is not 32 bytes long")]
-    LengthError,
+    #[error("Signing secret is not {expected_length} bytes long")]
+    LengthError { expected_length: usize },
 }
 
 fn read_signing_secret(variable_name: &str) -> Result<Signer, SigningSecretError> {
@@ -36,9 +38,24 @@ fn read_signing_secret(variable_name: &str) -> Result<Signer, SigningSecretError
         .decode(secret)
         .map_err(SigningSecretError::DecodeError)?
         .try_into()
-        .map_err(|_| SigningSecretError::LengthError)?;
+        .map_err(|_| SigningSecretError::LengthError {
+            expected_length: 32,
+        })?;
 
     Ok(Signer::new(secret))
+}
+
+fn read_cookie_signing_key() -> Result<cookie::Key, SigningSecretError> {
+    let secret = env::var("COOKIE_SIGNING_SECRET").map_err(SigningSecretError::ReadError)?;
+    let secret: [u8; 64] = BASE64_URL_SAFE_NO_PAD
+        .decode(secret)
+        .map_err(SigningSecretError::DecodeError)?
+        .try_into()
+        .map_err(|_| SigningSecretError::LengthError {
+            expected_length: 64,
+        })?;
+
+    Ok(cookie::Key::from(&secret))
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -61,6 +78,10 @@ enum AppError {
     AntiForgerySecretError(SigningSecretError),
     #[error("Error reading google user id signing secret")]
     GoogleUserIdSigningSecretError(SigningSecretError),
+    #[error("Error reading cookie signing secret")]
+    CookieSigningSecretError(SigningSecretError),
+    #[error("Error creating cookie key")]
+    CreateCookieKeyError,
 }
 
 #[tokio::main]
@@ -125,6 +146,16 @@ async fn main() -> Result<(), AppError> {
     let google_id_signer = read_signing_secret("GOOGLE_ID_SIGNING_SECRET")
         .map_err(AppError::GoogleUserIdSigningSecretError)?;
 
+    // Create example key
+    {
+        let mut key = [0; 64];
+        getrandom(&mut key).expect("Failed to generate random key");
+        // let key = cookie::Key::from(&key);
+        let key = BASE64_URL_SAFE_NO_PAD.encode(&key);
+        println!("Example cookie key: {}", key);
+    }
+    let cookie_key = read_cookie_signing_key().map_err(AppError::CookieSigningSecretError)?;
+
     let client = reqwest::Client::new();
     let app_state = AppState {
         connection,
@@ -133,6 +164,7 @@ async fn main() -> Result<(), AppError> {
         discovery_cache: discovery::DocumentCache::new(client.clone()),
         client,
         google_id_signer,
+        cookie_key,
     };
 
     let auth_routes = auth::create_router();
@@ -184,6 +216,7 @@ pub(crate) struct AppState {
     anti_forgery_token_provider: AntifForgeryTokenProvider,
     discovery_cache: discovery::DocumentCache,
     google_id_signer: Signer,
+    pub(crate) cookie_key: cookie::Key,
 }
 
 /// Runs forever and cleans up expired app data about every 5 minutes
