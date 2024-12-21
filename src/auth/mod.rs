@@ -443,6 +443,8 @@ enum HandleAuthenticationResponseError {
     EncodeTokenError(#[from] EncodeTokenError),
     #[error("Error checking for existing user: {0}")]
     GetUserError(#[from] libsql::Error),
+    #[error("Error creating cookie: {0}")]
+    CreateCookieError(#[from] postcard::Error),
 }
 
 impl IntoResponse for HandleAuthenticationResponseError {
@@ -650,7 +652,7 @@ async fn handle_authentication_response(
     State(state): State<AppState>,
     jar: SignedCookieJar,
     Query(response): Query<AuthenticationResponse>,
-) -> Result<Redirect, HandleAuthenticationResponseError> {
+) -> Result<impl IntoResponse, HandleAuthenticationResponseError> {
     tracing::debug!("Received redirect after authentication {:?}", response);
 
     // Anti replay protection should come from the code parameter as the IDP won't accept it twice
@@ -714,7 +716,13 @@ async fn handle_authentication_response(
     let row = rows.next().await?;
     let existing_user_id = row.map(|row| row.get::<String>(0)).transpose()?;
     if let Some(existing_user_id) = existing_user_id {
-        todo!("Set cookie")
+        let cookie = cookie::Session::build(existing_user_id.into())?
+            .path("/")
+            .secure(true)
+            .http_only(true)
+            .same_site(SameSite::Strict);
+
+        return Ok((jar.add(cookie), Redirect::to("/surveys")).into_response());
     }
 
     let token = CompleteSignInToken::new(claims.subject);
@@ -737,7 +745,7 @@ async fn handle_authentication_response(
         route.push_str(email);
     }
 
-    Ok(Redirect::to(&route))
+    Ok(Redirect::to(&route).into_response())
 }
 
 #[derive(thiserror::Error, Debug)]
