@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 
 use crate::{
     email::{send_sign_in_email, Email},
@@ -728,24 +728,24 @@ async fn handle_authentication_response(
     let token = CompleteSignInToken::new(claims.subject);
     let signin_token = token.try_encode(&state.google_id_signer)?;
 
-    const ROUTE: &str = "/signin/complete/";
-    const EMAIL_PARAMETER: &str = "?email=";
-    // Are allowed email address characters also allowed in a URL?
-    let parameters_length = claims
-        .email
-        .as_ref()
-        .map_or(0, |email| EMAIL_PARAMETER.len() + email.len());
-    let mut route = String::with_capacity(ROUTE.len() + signin_token.len() + parameters_length);
-    route.push_str(ROUTE);
-    route.push_str(&signin_token);
+    static URL: LazyLock<Url> =
+        LazyLock::new(|| Url::parse("/signin/complete").expect("Expected compile time valid url"));
 
-    // Email does not need to be signed as that can be changed by the user
-    if let Some(email) = &claims.email {
-        route.push_str(EMAIL_PARAMETER);
-        route.push_str(email);
+    let mut url = URL.clone();
+    // These values can be changed by the user in the next sign up step
+    // so they don't need to be signed
+    {
+        let mut query = url.query_pairs_mut();
+        if let Some(email) = claims.email {
+            query.append_pair("email", &email);
+        }
+
+        if let Some(name) = claims.name {
+            query.append_pair("name", &name);
+        }
     }
 
-    Ok(Redirect::to(&route).into_response())
+    Ok(Redirect::to(url.as_str()).into_response())
 }
 
 #[derive(thiserror::Error, Debug)]
