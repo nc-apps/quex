@@ -31,7 +31,7 @@ impl Signer {
         result
     }
 
-    pub(crate) fn validate(&self, data: &[u8], signature: &[u8; 32]) -> bool {
+    pub(crate) fn is_valid(&self, data: &[u8], signature: &[u8; 32]) -> bool {
         let mut hmac: Hmac<Sha256> =
             Hmac::<Sha256>::new_from_slice(&self.key).expect("HMAC key should be 32 bytes");
 
@@ -72,7 +72,7 @@ impl AntifForgeryTokenProvider {
             return false;
         }
 
-        self.signer.validate(
+        self.signer.is_valid(
             &token_bytes[SIGNATURE_LENGTH..],
             &token_bytes[..SIGNATURE_LENGTH].try_into().unwrap(),
         )

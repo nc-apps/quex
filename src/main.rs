@@ -10,7 +10,6 @@ use axum::{http::Uri, routing::get, Router};
 use base64::prelude::BASE64_URL_SAFE_NO_PAD;
 use base64::Engine;
 use dotenvy::dotenv;
-use getrandom::getrandom;
 use libsql::{named_params, Connection};
 use tokio::signal;
 use tower_http::services::ServeDir;
@@ -146,14 +145,6 @@ async fn main() -> Result<(), AppError> {
     let google_id_signer = read_signing_secret("GOOGLE_ID_SIGNING_SECRET")
         .map_err(AppError::GoogleUserIdSigningSecretError)?;
 
-    // Create example key
-    {
-        let mut key = [0; 64];
-        getrandom(&mut key).expect("Failed to generate random key");
-        // let key = cookie::Key::from(&key);
-        let key = BASE64_URL_SAFE_NO_PAD.encode(&key);
-        println!("Example cookie key: {}", key);
-    }
     let cookie_key = read_cookie_signing_key().map_err(AppError::CookieSigningSecretError)?;
 
     let client = reqwest::Client::new();

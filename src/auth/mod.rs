@@ -1,10 +1,13 @@
-use std::sync::{Arc, LazyLock};
+use std::convert::Infallible;
+use std::ops::{Range, RangeFrom};
+use std::sync::Arc;
 
 use crate::{
     email::{send_sign_in_email, Email},
     AppState, ClientCredentials,
 };
 use askama_axum::{IntoResponse, Template};
+use axum::extract::FromRef;
 use axum::{
     async_trait,
     extract::{rejection::PathRejection, FromRequestParts, Path, Query, State},
@@ -78,7 +81,7 @@ async fn create_account(
         .await
         .unwrap();
 
-    //TODO email adress validation
+    //TODO email address validation
     send_sign_in_email(
         Email(request.email),
         &client,
@@ -433,8 +436,8 @@ enum HandleAuthenticationResponseError {
     CreateRedirectUrlError(#[from] BadServerUrl),
     #[error("Failed to send request for access token")]
     RequestError(#[from] reqwest::Error),
-    #[error("Received response but response indicates an error")]
-    ResponseError(reqwest::Error),
+    #[error("Received response but response indicates an error: {0}")]
+    ResponseError(reqwest::StatusCode),
     #[error("Failed to deserialize response: {0}")]
     DeserializeError(reqwest::Error),
     #[error("Failed to validate id token: {0}")]
@@ -445,6 +448,8 @@ enum HandleAuthenticationResponseError {
     GetUserError(#[from] libsql::Error),
     #[error("Error creating cookie: {0}")]
     CreateCookieError(#[from] postcard::Error),
+    #[error("Error creating complete signup redirect url: {0}")]
+    CreateCompleteSignupUrlError(#[from] url::ParseError),
 }
 
 impl IntoResponse for HandleAuthenticationResponseError {
@@ -570,6 +575,9 @@ enum EncodeTokenError {
 enum DecodeTokenError {
     #[error("Error decoding base64: {0}")]
     DecodeError(#[from] base64::DecodeError),
+    #[error("Invalid signature")]
+    InvalidSignature,
+    //TODO make minimum length constant
     #[error("Bad token length")]
     BadTokenLength {
         mininum_expected: usize,
@@ -584,6 +592,7 @@ enum DecodeTokenError {
     NonAsciiUserId,
 }
 
+#[derive(Debug)]
 struct CompleteSignInToken {
     user_id: Arc<str>,
     issued_at: OffsetDateTime,
@@ -592,6 +601,18 @@ struct CompleteSignInToken {
 impl CompleteSignInToken {
     const TIMESTAMP_LENGTH: usize = size_of::<i64>();
     const SALT_LENGTH: usize = 16;
+    const SIGNATURE_LENGTH: usize = 32;
+    const MINIMUM_LENGTH: usize =
+        Self::SIGNATURE_LENGTH + Self::SALT_LENGTH + Self::TIMESTAMP_LENGTH + 1;
+    const SIGNATURE: Range<usize> = 0..Self::SIGNATURE_LENGTH;
+    const PAYLOAD: RangeFrom<usize> = Self::SIGNATURE.end..;
+    const SALT: Range<usize> = Self::SIGNATURE.end..Self::SIGNATURE.end + Self::SALT_LENGTH;
+    const TIME_STAMP: Range<usize> = Self::SALT.end..Self::SALT.end + Self::TIMESTAMP_LENGTH;
+    const USER_ID: RangeFrom<usize> = Self::TIME_STAMP.end..;
+
+    const fn get_length(user_id_length: usize) -> usize {
+        Self::SIGNATURE_LENGTH + Self::SALT_LENGTH + Self::TIMESTAMP_LENGTH + user_id_length
+    }
 
     fn new(user_id: Arc<str>) -> Self {
         let issued_at = OffsetDateTime::now_utc();
@@ -603,25 +624,48 @@ impl CompleteSignInToken {
         let user_id = self.user_id.as_bytes();
         let issued_at = self.issued_at.unix_timestamp().to_be_bytes();
         // Only unknown size is the user id
-        let mut data =
-            Vec::with_capacity(Self::SALT_LENGTH + Self::TIMESTAMP_LENGTH + user_id.len());
-        getrandom(&mut data[..Self::SALT_LENGTH])?;
-        data.extend_from_slice(&issued_at);
-        data.extend_from_slice(user_id);
-        let signed_token = signer.sign(&data);
+        let length = Self::get_length(user_id.len());
+        let mut data = vec![0; length];
 
-        Ok(BASE64_URL_SAFE_NO_PAD.encode(signed_token))
+        getrandom(&mut data[Self::SALT])?;
+        data[Self::TIME_STAMP].copy_from_slice(&issued_at);
+        data[Self::USER_ID].copy_from_slice(user_id);
+        let signature = signer.sign(&data[Self::PAYLOAD]);
+        tracing::debug!("Payload {:x?}", &data[Self::PAYLOAD]);
+        assert_eq!(signature.as_ref().len(), Self::SIGNATURE_LENGTH);
+        data[Self::SIGNATURE].copy_from_slice(signature.as_ref());
+
+        Ok(BASE64_URL_SAFE_NO_PAD.encode(data))
     }
 
-    fn try_decode(data: impl AsRef<[u8]>) -> Result<Self, DecodeTokenError> {
-        //TODO implement
+    fn try_decode(data: impl AsRef<[u8]>, signer: &Signer) -> Result<Self, DecodeTokenError> {
         let decoded = BASE64_URL_SAFE_NO_PAD.decode(data)?;
 
+        let signature = decoded
+            .get(Self::SIGNATURE)
+            .and_then(|slice| slice.try_into().ok())
+            .ok_or(DecodeTokenError::BadTokenLength {
+                mininum_expected: Self::MINIMUM_LENGTH,
+                actual: decoded.len(),
+            })?;
+
+        let payload = decoded
+            .get(Self::PAYLOAD)
+            .ok_or(DecodeTokenError::BadTokenLength {
+                mininum_expected: Self::MINIMUM_LENGTH,
+                actual: decoded.len(),
+            })?;
+        tracing::debug!("Payload {:x?}", payload);
+
+        if !signer.is_valid(payload, signature) {
+            return Err(DecodeTokenError::InvalidSignature);
+        }
+
         let timestamp = decoded
-            .get(Self::SALT_LENGTH..Self::SALT_LENGTH + Self::TIMESTAMP_LENGTH)
+            .get(Self::TIME_STAMP)
             .ok_or(DecodeTokenError::BadTokenLength {
                 // User id is minimum one byte long
-                mininum_expected: Self::SALT_LENGTH + Self::TIMESTAMP_LENGTH + 1,
+                mininum_expected: Self::MINIMUM_LENGTH,
                 actual: decoded.len(),
             })?;
 
@@ -629,9 +673,9 @@ impl CompleteSignInToken {
         let issued_at = OffsetDateTime::from_unix_timestamp(timestamp)?;
 
         let user_id = decoded
-            .get(Self::SALT_LENGTH + Self::TIMESTAMP_LENGTH..)
+            .get(Self::USER_ID)
             .ok_or(DecodeTokenError::BadTokenLength {
-                mininum_expected: Self::SALT_LENGTH + Self::TIMESTAMP_LENGTH + 1,
+                mininum_expected: Self::MINIMUM_LENGTH,
                 actual: decoded.len(),
             })?;
 
@@ -645,6 +689,40 @@ impl CompleteSignInToken {
             user_id: Arc::from(user_id),
             issued_at,
         })
+    }
+}
+
+#[derive(thiserror::Error, Debug)]
+enum DecodeTokenRejection {
+    #[error("Failed to get path parameter: {0}")]
+    CreatePathError(#[from] PathRejection),
+    #[error("Failed to decode token: {0}")]
+    DecodeError(#[from] DecodeTokenError),
+}
+
+impl IntoResponse for DecodeTokenRejection {
+    fn into_response(self) -> askama_axum::Response {
+        tracing::error!("Error decoding token: {}", self);
+        //TODO redirect user
+        http::StatusCode::BAD_REQUEST.into_response()
+    }
+}
+
+#[async_trait]
+impl<S> FromRequestParts<S> for CompleteSignInToken
+where
+    AppState: FromRef<S>,
+    S: Send + Sync,
+{
+    type Rejection = DecodeTokenRejection;
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        let Path(signin_token) = Path::<Arc<str>>::from_request_parts(parts, state).await?;
+        let Ok(State(state)): Result<State<AppState>, Infallible> =
+            State::from_request_parts(parts, state).await;
+        let token =
+            CompleteSignInToken::try_decode(signin_token.as_bytes(), &state.google_id_signer)?;
+        Ok(token)
     }
 }
 
@@ -691,9 +769,15 @@ async fn handle_authentication_response(
         .post(token_endpoint)
         .form(&request)
         .send()
-        .await?
-        .error_for_status()
-        .map_err(HandleAuthenticationResponseError::ResponseError)?;
+        .await?;
+
+    let status = response.status();
+    if status.is_client_error() || status.is_server_error() {
+        let text = response.text().await?;
+        tracing::error!("Error response from google: {}", text);
+
+        return Err(HandleAuthenticationResponseError::ResponseError(status));
+    }
 
     let response: AccessTokenResponse = response
         .json()
@@ -708,7 +792,7 @@ async fn handle_authentication_response(
     let mut rows = state
         .connection
         .query(
-            "SELECT user_id FROM google_connections WHERE id = :id",
+            "SELECT user_id FROM google_account_connections WHERE google_user_id = :id",
             named_params![":id": claims.subject],
         )
         .await?;
@@ -728,59 +812,32 @@ async fn handle_authentication_response(
     let token = CompleteSignInToken::new(claims.subject);
     let signin_token = token.try_encode(&state.google_id_signer)?;
 
-    static URL: LazyLock<Url> =
-        LazyLock::new(|| Url::parse("/signin/complete").expect("Expected compile time valid url"));
+    let mut url = format!("/signup/complete/{signin_token}");
 
-    let mut url = URL.clone();
     // These values can be changed by the user in the next sign up step
     // so they don't need to be signed
-    {
-        let mut query = url.query_pairs_mut();
-        if let Some(email) = claims.email {
-            query.append_pair("email", &email);
+    match (claims.email, claims.name) {
+        (Some(email), Some(name)) => {
+            url.push_str(&format!("?email={}&name={}", email, name));
         }
-
-        if let Some(name) = claims.name {
-            query.append_pair("name", &name);
+        (Some(email), None) => {
+            url.push_str(&format!("?email={}", email));
         }
+        (None, Some(name)) => {
+            url.push_str(&format!("?name={}", name));
+        }
+        (None, None) => {}
     }
 
-    Ok(Redirect::to(url.as_str()).into_response())
-}
-
-#[derive(thiserror::Error, Debug)]
-enum DecodeTokenRejection {
-    #[error("Failed to get path parameter")]
-    CreatePathError(#[from] PathRejection),
-    #[error("Failed to decode token")]
-    DecodeError(#[from] DecodeTokenError),
-}
-impl IntoResponse for DecodeTokenRejection {
-    fn into_response(self) -> askama_axum::Response {
-        tracing::error!("Error decoding token: {}", self);
-        //TODO redirect user
-        http::StatusCode::BAD_REQUEST.into_response()
-    }
-}
-
-#[async_trait]
-impl<S> FromRequestParts<S> for CompleteSignInToken
-where
-    S: Send + Sync,
-{
-    type Rejection = DecodeTokenRejection;
-
-    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        let Path(signin_token) = Path::<Arc<[u8]>>::from_request_parts(parts, state).await?;
-        let token = CompleteSignInToken::try_decode(signin_token)?;
-        Ok(token)
-    }
+    Ok(Redirect::to(&url).into_response())
 }
 
 #[derive(thiserror::Error, Debug)]
 enum CompleteSignInError {
     #[error("Signin token and link is expired")]
     Expired,
+    #[error("Error encoding token again: {0}")]
+    EncodeTokenError(#[from] EncodeTokenError),
 }
 
 impl IntoResponse for CompleteSignInError {
@@ -793,13 +850,16 @@ impl IntoResponse for CompleteSignInError {
 #[derive(Template)]
 #[template(path = "auth/complete_signin.html")]
 struct CompleteSigninTemplate {
+    name: Option<Arc<str>>,
     email_address: Option<Arc<str>>,
+    token: Arc<str>,
 }
 
 #[derive(Deserialize, Debug)]
 struct CompleteSigninRequest {
     #[serde(rename = "email")]
     email_address: Option<Arc<str>>,
+    name: Option<Arc<str>>,
 }
 
 /// # Possible attack vectors
@@ -811,7 +871,8 @@ struct CompleteSigninRequest {
 /// ## User abandonds the sign in but the link is leaked
 /// This is probably very unlikely as the link is only shared with the user.
 /// An "issued at" value with a expire duration invalidates abandoned links after some time.
-async fn get_complete_signin_page(
+async fn get_complete_signup_page(
+    State(state): State<AppState>,
     token: CompleteSignInToken,
     Query(query): Query<CompleteSigninRequest>,
 ) -> Result<CompleteSigninTemplate, CompleteSignInError> {
@@ -820,12 +881,28 @@ async fn get_complete_signin_page(
         return Err(CompleteSignInError::Expired);
     }
 
+    let token = token.try_encode(&state.google_id_signer)?;
+
     Ok(CompleteSigninTemplate {
         email_address: query.email_address,
+        name: query.name,
+        token: Arc::from(token),
     })
 }
 
-// async fn complete_signup()
+#[derive(Deserialize, Debug)]
+struct CompleteSignInRequest {
+    name: Arc<str>,
+    #[serde(rename = "email")]
+    email_address: Arc<str>,
+    token: Arc<str>,
+}
+
+async fn complete_signup(
+    State(state): State<AppState>,
+    Form(request): Form<CompleteSignInRequest>,
+) {
+}
 
 pub(crate) fn create_router() -> Router<AppState> {
     Router::new()
@@ -837,8 +914,8 @@ pub(crate) fn create_router() -> Router<AppState> {
         .route("/signin/expired", get(sign_in_expired))
         .route("/signout", get(sign_out))
         .route(
-            "/signin/complete/:signin_token",
-            get(get_complete_signin_page),
+            "/signup/complete/:signin_token",
+            get(get_complete_signup_page),
         )
         .route(REDIRECT_PATH, get(handle_authentication_response))
 }
