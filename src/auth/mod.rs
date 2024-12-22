@@ -923,17 +923,74 @@ async fn get_complete_signup_page(
 }
 
 #[derive(Deserialize, Debug)]
-struct CompleteSignInRequest {
+struct CompleteSignUpRequest {
     name: Arc<str>,
     #[serde(rename = "email")]
     email_address: Arc<str>,
     token: Arc<str>,
 }
 
+#[derive(thiserror::Error, Debug)]
+enum CompleteSignUpError {
+    #[error("Error decoding token: {0}")]
+    DecodeError(#[from] DecodeTokenError),
+    #[error("Signin token is expired")]
+    Expired,
+    #[error("Error creating cookie: {0}")]
+    CreateCookieError(#[from] postcard::Error),
+}
+
+impl IntoResponse for CompleteSignUpError {
+    fn into_response(self) -> askama_axum::Response {
+        tracing::error!("Error completing sign in: {}", self);
+        http::StatusCode::INTERNAL_SERVER_ERROR.into_response()
+    }
+}
+
 async fn complete_signup(
     State(state): State<AppState>,
-    Form(request): Form<CompleteSignInRequest>,
-) {
+    jar: SignedCookieJar,
+    Form(request): Form<CompleteSignUpRequest>,
+) -> Result<impl IntoResponse, CompleteSignUpError> {
+    let token = CompleteSignInToken::try_decode(request.token.as_bytes(), &state.google_id_signer)?;
+    let expires_at = token.issued_at + Duration::minutes(15);
+    if expires_at < OffsetDateTime::now_utc() {
+        return Err(CompleteSignUpError::Expired);
+    }
+
+    let user_id = nanoid!();
+    state
+        .connection
+        .execute(
+            "INSERT INTO users (id, name, email_address) VALUES (:id, :name, :email_address)",
+            named_params![
+                ":id": user_id.clone(),
+                ":name": request.name,
+                ":email_address": request.email_address.clone(),
+            ],
+        )
+        .await
+        .unwrap();
+
+    state
+        .connection
+        .execute(
+            "INSERT INTO google_account_connections (user_id, google_user_id) VALUES (:user_id, :google_user_id)",
+            named_params![
+                ":user_id": user_id.clone(),
+                ":google_user_id": token.user_id,
+            ],
+        )
+        .await
+        .unwrap();
+
+    let cookie = cookie::Session::build(user_id.into())?
+        .path("/")
+        .secure(true)
+        .http_only(true)
+        .same_site(SameSite::Strict);
+
+    Ok((jar.add(cookie), Redirect::to("/surveys")).into_response())
 }
 
 pub(crate) fn create_router() -> Router<AppState> {
