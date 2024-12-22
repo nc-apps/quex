@@ -8,6 +8,7 @@ use crate::{
 };
 use askama_axum::{IntoResponse, Template};
 use axum::extract::FromRef;
+use axum::routing::post;
 use axum::{
     async_trait,
     extract::{rejection::PathRejection, FromRequestParts, Path, Query, State},
@@ -1002,6 +1003,7 @@ pub(crate) fn create_router() -> Router<AppState> {
         .route("/signin/:attempt_id", get(complete_signin))
         .route("/signin/expired", get(sign_in_expired))
         .route("/signout", get(sign_out))
+        .route("/signup/complete", post(complete_signup))
         .route(
             "/signup/complete/:signin_token",
             get(get_complete_signup_page),
