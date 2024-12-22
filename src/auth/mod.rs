@@ -255,7 +255,7 @@ async fn sign_up_handler(user: Option<AuthenticatedUser>) -> impl IntoResponse {
 }
 
 async fn sign_in_handler(
-    state: State<AppState>,
+    State(state): State<AppState>,
     user: Option<AuthenticatedUser>,
 ) -> impl IntoResponse {
     // Check if is already authenticated and redirect to surveys
@@ -264,7 +264,8 @@ async fn sign_in_handler(
         return Redirect::to("/surveys").into_response();
     }
 
-    let url = get_sign_in_with_google_url(state)
+    // Must include "openid" https://developers.google.com/identity/openid-connect/openid-connect#scope-param
+    let url = get_sign_in_with_google_url(&state, Scopes(["openid"]))
         .await
         .inspect_err(|error| tracing::error!("Error creating sign in with google url: {}", error))
         .ok();
@@ -354,14 +355,23 @@ enum ResponseType {
 }
 
 #[derive(Serialize, Debug)]
+#[serde(rename_all = "snake_case")]
+enum Prompt {
+    Consent,
+    SelectAccount,
+}
+
+#[derive(Serialize, Debug)]
 struct AuthenticationRequest<'a, const SCOPES_LENGTH: usize> {
     client_id: &'a str,
     response_type: ResponseType,
     #[serde(rename = "scope")]
-    scropes: Scopes<'a, SCOPES_LENGTH>,
+    scopes: Scopes<'a, SCOPES_LENGTH>,
     redirect_uri: Url,
     state: AntiforgeryToken,
     nonce: Nonce,
+    prompt: Option<Prompt>,
+    include_granted_scopes: Option<bool>,
 }
 
 const REDIRECT_PATH: &str = "/redirect";
@@ -374,10 +384,15 @@ fn create_redirect_url(server_url: Uri) -> Result<Url, BadServerUrl> {
     Ok(redirect_url)
 }
 
-async fn get_sign_in_with_google_url(
-    State(state): State<AppState>,
+async fn get_sign_in_with_google_url<const SCOPES_LENGTH: usize>(
+    state: &AppState,
+    scopes: Scopes<'_, SCOPES_LENGTH>,
 ) -> Result<Url, SignInWithGoogleError> {
-    let Some(ClientCredentials { id: client_id, .. }) = state.configuration.client_credentials
+    let Some(client_id) = state
+        .configuration
+        .client_credentials
+        .clone()
+        .map(|credentials| credentials.id)
     else {
         return Err(SignInWithGoogleError::NoClientCredentials);
     };
@@ -393,19 +408,22 @@ async fn get_sign_in_with_google_url(
 
     ensure_https(&mut authorization_endpoint)?;
 
-    let redirect_url = create_redirect_url(state.configuration.server_url)?;
+    let redirect_url = create_redirect_url(state.configuration.server_url.clone())?;
 
     // Create anti-forgery token
     let antiforgery_token = state
         .anti_forgery_token_provider
         .create_antiforgery_token()?;
+
     let request = AuthenticationRequest {
         client_id: client_id.as_ref(),
         nonce: Nonce::new(),
         redirect_uri: redirect_url,
         response_type: ResponseType::Code,
-        scropes: Scopes(["openid", "email"]),
+        scopes,
         state: antiforgery_token,
+        include_granted_scopes: None,
+        prompt: None,
     };
 
     let query = serde_urlencoded::to_string(request)?;
@@ -853,6 +871,7 @@ struct CompleteSigninTemplate {
     name: Option<Arc<str>>,
     email_address: Option<Arc<str>>,
     token: Arc<str>,
+    request_data_url: Option<Url>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -883,10 +902,23 @@ async fn get_complete_signup_page(
 
     let token = token.try_encode(&state.google_id_signer)?;
 
+    let request_data_url = if query.email_address.is_none() && query.name.is_none() {
+        let scopes = Scopes(["openid", "email", "profile"]);
+        get_sign_in_with_google_url(&state, scopes)
+            .await
+            .inspect_err(|error| {
+                tracing::error!("Error creating sign in with google url: {}", error)
+            })
+            .ok()
+    } else {
+        None
+    };
+
     Ok(CompleteSigninTemplate {
         email_address: query.email_address,
         name: query.name,
         token: Arc::from(token),
+        request_data_url,
     })
 }
 

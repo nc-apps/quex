@@ -34,6 +34,9 @@
         value="{{ token }}"
         disabled
     >
+    {% if let Some(url) = request_data_url %}
+    <a href="{{ url }}" rel="noreferrer">Load data from Google</a>
+    {% endif %}
     <button type="submit">Sign up</button>
 {% call super() %}
 {% endblock %}
