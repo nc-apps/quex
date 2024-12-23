@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use crate::{
     email::{send_sign_in_email, Email},
-    AppState, ClientCredentials,
+    AppState,
 };
 use askama_axum::{IntoResponse, Template};
 use axum::extract::FromRef;
