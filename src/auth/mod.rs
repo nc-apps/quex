@@ -238,7 +238,7 @@ async fn sign_in(
 struct SignUpTemplate {}
 
 #[derive(Template)]
-#[template(path = "sign_in.html")]
+#[template(path = "auth/signin.html")]
 struct SignInTemplate {
     sign_in_with_google_url: Option<Url>,
 }
