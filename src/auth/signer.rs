@@ -65,7 +65,7 @@ impl AntifForgeryTokenProvider {
         Ok(AntiforgeryToken(BASE64_URL_SAFE_NO_PAD.encode(&token)))
     }
 
-    pub(super) fn is_token_valid(&self, AntiforgeryToken(token): AntiforgeryToken) -> bool {
+    pub(super) fn is_token_valid(&self, AntiforgeryToken(token): &AntiforgeryToken) -> bool {
         let mut token_bytes = [0; TOKEN_LENGTH];
         let bytes_written = BASE64_URL_SAFE_NO_PAD.decode_slice(token, &mut token_bytes);
         if !matches!(bytes_written, Ok(TOKEN_LENGTH)) {
