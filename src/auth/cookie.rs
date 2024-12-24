@@ -92,6 +92,11 @@ pub(super) fn create<'a>(user_id: Arc<str>) -> Result<CookieBuilder<'a>, postcar
         // Tell browsers to not allow JavaScript to access the cookie. Prevents some XSS attacks
         // (JS can still indirectly find out if user is authenticated by trying to access authenticated endpoints)
         .http_only(true)
-        // Prevents CRSF attack
-        .same_site(SameSite::Strict))
+        // Strict prevents any cross site request
+        // Lax allows requests from other sites if it is a get request
+        // But we need lax as otherwise OpenID Connect redirects to our site break the flow
+        // as it is considered part of the redirect chain where our cookies get set but are no sent.
+        // Additionally CORS should be set up correctly to prevent requests from other sites.
+        // https://portswigger.net/web-security/csrf/bypassing-samesite-restrictions
+        .same_site(SameSite::Lax))
 }

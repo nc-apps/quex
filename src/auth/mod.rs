@@ -990,7 +990,9 @@ pub(crate) fn create_router() -> Router<AppState> {
         .route("/signin/completed", get(signin_completed))
         .route("/signin/:attempt_id", get(complete_signin))
         .route("/signin/expired", get(sign_in_expired))
-        .route("/signout", get(sign_out))
+        // Sign out has to be post to prevent other sites from signing users out by linking to the sign out link
+        // (See SameSite lax and CRSF)
+        .route("/signout", post(sign_out))
         .route("/signup/complete", post(complete_signup))
         .route(
             "/signup/complete/:signin_token",
