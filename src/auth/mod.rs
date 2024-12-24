@@ -815,9 +815,7 @@ async fn handle_authentication_response(
     if let Some(existing_user_id) = existing_user_id {
         let cookie = cookie::create(existing_user_id.into())?;
 
-        let mut headers = HeaderMap::new();
-        headers.insert(LOCATION, HeaderValue::from_static("/surveys"));
-        return Ok((jar.add(cookie), headers, StatusCode::FOUND).into_response());
+        return Ok((jar.add(cookie), Redirect::to("/surveys")).into_response());
     }
 
     let token = CompleteSignInToken::new(claims.subject);
