@@ -3,7 +3,7 @@ use std::sync::Arc;
 use axum::extract::FromRef;
 use axum_extra::extract::cookie::{Cookie, Key as AxumKey};
 use base64::{prelude::BASE64_URL_SAFE_NO_PAD, Engine};
-use cookie::CookieBuilder;
+use cookie::{CookieBuilder, SameSite};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use time::OffsetDateTime;
@@ -43,7 +43,7 @@ impl Session {
     const NAME: &str = "session";
     const LIFETIME: time::Duration = time::Duration::days(30);
 
-    pub(super) fn build<'a>(user_id: Arc<str>) -> Result<CookieBuilder<'a>, postcard::Error> {
+    fn build<'a>(user_id: Arc<str>) -> Result<CookieBuilder<'a>, postcard::Error> {
         let expires_at = OffsetDateTime::now_utc() + Self::LIFETIME;
         let cookie = Self::new(expires_at, user_id);
         let serialized = postcard::to_allocvec(&cookie)?;
@@ -83,4 +83,15 @@ impl TryFrom<Cookie<'_>> for Session {
         let value = postcard::from_bytes(&serialied)?;
         Ok(value)
     }
+}
+
+pub(super) fn create<'a>(user_id: Arc<str>) -> Result<CookieBuilder<'a>, postcard::Error> {
+    Ok(Session::build(user_id)?
+        .path("/")
+        .secure(true)
+        // Tell browsers to not allow JavaScript to access the cookie. Prevents some XSS attacks
+        // (JS can still indirectly find out if user is authenticated by trying to access authenticated endpoints)
+        .http_only(true)
+        // Prevents CRSF attack
+        .same_site(SameSite::Strict))
 }

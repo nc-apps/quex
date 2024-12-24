@@ -8,6 +8,7 @@ use crate::{
 };
 use askama_axum::{IntoResponse, Template};
 use axum::extract::FromRef;
+use axum::http::{HeaderMap, HeaderValue};
 use axum::routing::post;
 use axum::{
     async_trait,
@@ -17,13 +18,15 @@ use axum::{
     routing::get,
     Form, Router,
 };
-use axum_extra::extract::{cookie::SameSite, SignedCookieJar};
+use axum_extra::extract::SignedCookieJar;
 use base64::{prelude::BASE64_URL_SAFE_NO_PAD, Engine};
 use getrandom::getrandom;
 use jsonwebtoken::{jwk::JwkSet, DecodingKey, Validation};
 use libsql::named_params;
 use nanoid::nanoid;
 use open_id_connect::discovery;
+use reqwest::header::LOCATION;
+use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use signer::{AntiforgeryToken, CreateAntiforgeryTokenError, Signer};
 use time::{Duration, OffsetDateTime};
@@ -133,22 +136,13 @@ async fn complete_signin(
 
     // Set session cookie
     // The cookie does not need to be encrypted as it doesn't contain any sensitive information
-    let cookie_builder = match cookie::Session::build(Arc::from(user_id)) {
+    let cookie = match cookie::create(Arc::from(user_id)) {
         Ok(builder) => builder,
         Err(error) => {
             tracing::error!("Error building cookie: {}", error);
             return Redirect::to("/").into_response();
         }
     };
-
-    let cookie = cookie_builder
-        .path("/")
-        .secure(true)
-        // Tell browsers to not allow JavaScript to access the cookie. Prevents some XSS attacks
-        // (JS can still indirectly find out if user is authenticated by trying to access authenticated endpoints)
-        .http_only(true)
-        // Prevents CRSF attack
-        .same_site(SameSite::Strict);
 
     (jar.add(cookie), Redirect::to("/surveys")).into_response()
 }
@@ -819,13 +813,11 @@ async fn handle_authentication_response(
     let row = rows.next().await?;
     let existing_user_id = row.map(|row| row.get::<String>(0)).transpose()?;
     if let Some(existing_user_id) = existing_user_id {
-        let cookie = cookie::Session::build(existing_user_id.into())?
-            .path("/")
-            .secure(true)
-            .http_only(true)
-            .same_site(SameSite::Strict);
+        let cookie = cookie::create(existing_user_id.into())?;
 
-        return Ok((jar.add(cookie), Redirect::to("/surveys")).into_response());
+        let mut headers = HeaderMap::new();
+        headers.insert(LOCATION, HeaderValue::from_static("/surveys"));
+        return Ok((jar.add(cookie), headers, StatusCode::FOUND).into_response());
     }
 
     let token = CompleteSignInToken::new(claims.subject);
@@ -985,11 +977,7 @@ async fn complete_signup(
         .await
         .unwrap();
 
-    let cookie = cookie::Session::build(user_id.into())?
-        .path("/")
-        .secure(true)
-        .http_only(true)
-        .same_site(SameSite::Strict);
+    let cookie = cookie::create(user_id.into())?;
 
     Ok((jar.add(cookie), Redirect::to("/surveys")).into_response())
 }
