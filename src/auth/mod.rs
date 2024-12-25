@@ -127,7 +127,7 @@ fn create_redirect_url(server_url: Uri) -> Result<Url, BadServerUrl> {
 
 #[derive(thiserror::Error, Debug)]
 enum CompleteSignInError {
-    #[error("Signin token and link is expired")]
+    #[error("Signin token/link is expired")]
     Expired,
     #[error("Error encoding token again: {0}")]
     EncodeTokenError(#[from] EncodeTokenError),
@@ -135,8 +135,14 @@ enum CompleteSignInError {
 
 impl IntoResponse for CompleteSignInError {
     fn into_response(self) -> askama_axum::Response {
-        tracing::error!("Error getting complete sign in page: {}", self);
-        http::StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        match self {
+            //TODO display error message to user
+            CompleteSignInError::Expired => Redirect::to("/signin").into_response(),
+            other => {
+                tracing::error!("Error getting complete sign in page: {}", other);
+                http::StatusCode::INTERNAL_SERVER_ERROR.into_response()
+            }
+        }
     }
 }
 

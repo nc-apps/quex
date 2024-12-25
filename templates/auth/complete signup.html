@@ -3,34 +3,43 @@
 Complete Sign up
 {% endblock %}
 {% block content %}
-<hgroup>
-    <h1>Complete Sign up</h1>
-    <p>Hi, this seems to be the first time you are using Quex. Please complete the following information.</p>
-</hgroup>
-<form action="/signup/complete" method="post">
 
-    <label for="name">Name</label>
-    <input
-        type="text"
-        name="name"
-        id="name"
-        autocomplete="name"
-        required
-        autocorrect="off"
-        autocapitalize="off"
-        {% if let Some(name) = name %}
-        value="{{ name }}"
-        {% endif %}
-    >
-    <p>You can choose whatever name you like. This will show up when you share and collaborate with others. So choose wisely.</p>
-    <input
-        type="hidden"
-        name="token"
-        value="{{ token }}"
-    >
-    {% if let Some(url) = request_data_url %}
-    <a href="{{ url }}" rel="noreferrer">Load data from Google</a>
-    {% endif %}
-    <button type="submit">Sign up</button>
+
+<form action="/signup/complete" method="post" class="flex flex-col justify-center min-h-full px-6 py-12 lg:px-8">
+    <div class="sm:mx-auto sm:w-full sm:max-w-sm">
+        <h1 class="mt-10 text-4xl font-bold leading-9 tracking-tight text-center text-blue-900">Quex</h1>
+        <hgroup>
+            <h2 class="mt-10 mb-2 text-2xl font-bold leading-9 tracking-tight text-center text-gray-900">
+                Complete your Sign up
+            </h2>
+        </hgroup>
+        <p class="font-semibold leading-snug text-center text-gray-600 text-pretty">
+            Hi, this seems to be the first time you are using Quex.
+        </p>
+    </div>
+
+    <div class="mt-10 sm:mx-auto sm:w-full sm:max-w-sm">
+        <div class="flex items-center justify-between">
+            <label for="name" class="block font-medium text-gray-900 text-sm/6">Your name</label>
+            {% if let Some(url) = request_data_url %}
+            <a href="{{ url }}" rel="noreferrer" class="text-sm font-semibold text-blue-600 hover:text-blue-500">Use
+                your Google account name</a>
+            {% endif %}
+        </div>
+        <div class="mt-2">
+            <input type="text" name="name" id="name" autocomplete="name" required autocorrect="off" autocapitalize="off"
+                {% if let Some(name)=name %} value="{{ name }}" {% endif %}
+                class="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6"
+                aria-describedby="name-description">
+        </div>
+        <p class="mt-2 text-sm text-gray-500" id="name-description">Help others recognize you</p>
+        <input type="hidden" name="token" value="{{ token }}">
+        <button type="submit"
+            class="flex mt-6 w-full justify-center rounded-md bg-indigo-600 px-3 py-1.5 text-sm/6 font-semibold text-white shadow-xs hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">
+            Sign up
+        </button>
+    </div>
+
+</form>
 {% call super() %}
 {% endblock %}
