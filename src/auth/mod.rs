@@ -1,5 +1,3 @@
-use std::convert::Infallible;
-use std::ops::{Range, RangeFrom};
 use std::sync::Arc;
 
 use crate::{
@@ -7,13 +5,10 @@ use crate::{
     AppState,
 };
 use askama_axum::{IntoResponse, Template};
-use axum::extract::FromRef;
-use axum::http::{HeaderMap, HeaderValue};
 use axum::routing::post;
 use axum::{
-    async_trait,
-    extract::{rejection::PathRejection, FromRequestParts, Path, Query, State},
-    http::{self, request::Parts, Uri},
+    extract::{Path, Query, State},
+    http::{self, Uri},
     response::Redirect,
     routing::get,
     Form, Router,
@@ -21,14 +16,11 @@ use axum::{
 use axum_extra::extract::SignedCookieJar;
 use base64::{prelude::BASE64_URL_SAFE_NO_PAD, Engine};
 use getrandom::getrandom;
-use jsonwebtoken::{jwk::JwkSet, DecodingKey, Validation};
 use libsql::named_params;
 use nanoid::nanoid;
-use open_id_connect::{authentication_response, discovery, get_sign_in_with_google_url};
-use reqwest::header::LOCATION;
-use reqwest::StatusCode;
+use open_id_connect::{authentication_response, get_sign_in_with_google_url};
 use serde::{Deserialize, Serialize};
-use signer::{AntiforgeryToken, CreateAntiforgeryTokenError, Signer};
+use signer::{AntiforgeryToken, Signer};
 use time::{Duration, OffsetDateTime};
 use token::complete_signin::{CompleteSignInToken, DecodeTokenError, EncodeTokenError};
 use url::Url;
