@@ -15,7 +15,7 @@ use time::OffsetDateTime;
 
 /// The HTML template for the AttrakDiff survey
 #[derive(Template)]
-#[template(path = "attrakdiff.html")]
+#[template(path = "surveys/responses/attrakdiff.html")]
 struct AttrakDiffTemplate {
     id: String,
     questions: Vec<(String, String)>,
@@ -296,7 +296,7 @@ pub(super) async fn create_new_survey(
 //TODO consider renaming to evaluation or something more fitting
 /// The HTML template for the AttrakDiff survey details and results page
 #[derive(Template)]
-#[template(path = "results/attrakdiff.html")]
+#[template(path = "surveys/results/attrakdiff.html")]
 struct AttrakdiffResultsTemplate {
     id: String,
     name: String,
