@@ -19,7 +19,7 @@ use crate::{
     AppState,
 };
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, PartialEq)]
 #[serde(rename_all = "snake_case")]
 enum AuthenticationResponseErrorCode {
     InvalidRequest,
@@ -242,15 +242,24 @@ pub(in crate::auth) async fn handle(
 mod test {
     use super::*;
 
+    /// This tests not if serde works but if we constructed the structs and enums in a way serde
+    /// can deserialize the query parameters
     #[test]
     fn can_deserialize() {
         let query = "error=invalid_request&error_description=Invalid+request&state=123";
 
+        let _response: AuthenticationResponse = serde_urlencoded::from_str(query).unwrap();
         let response: AuthenticationError = serde_urlencoded::from_str(query).unwrap();
-        let response: AuthenticationResponse = serde_urlencoded::from_str(query).unwrap();
+        assert_eq!(
+            response.code,
+            AuthenticationResponseErrorCode::InvalidRequest
+        );
+        assert_eq!(response.description, Some(Arc::from("Invalid request")));
 
         let query = "code=123&scope=openid+email&state=123";
+        let _response: AuthenticationResponse = serde_urlencoded::from_str(query).unwrap();
         let response: AuthenticationSuccess = serde_urlencoded::from_str(query).unwrap();
-        let response: AuthenticationResponse = serde_urlencoded::from_str(query).unwrap();
+        assert_eq!(response.code.as_ref(), "123");
+        assert_eq!(response.scopes.as_ref(), "openid email");
     }
 }
