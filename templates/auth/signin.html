@@ -4,7 +4,7 @@ Sign in
 {% endblock %}
 {% block content %}
 
-<div class="flex flex-col justify-center min-h-full px-6 py-12 lg:px-8">
+<main class="flex flex-col justify-between h-screen min-h-full px-6 py-12 sm:h-auto lg:px-8">
     <div class="sm:mx-auto sm:w-full sm:max-w-sm">
         <h1 class="mt-10 text-4xl font-bold leading-9 tracking-tight text-center text-blue-900">Quex</h1>
         <h2 class="mt-10 text-2xl font-bold leading-9 tracking-tight text-center text-gray-900">Sign in to your account
@@ -36,7 +36,7 @@ Sign in
         </a>
         {% endif %}
     </div>
-</div>
+</main>
 
 {% call super() %}
 {% endblock %}
