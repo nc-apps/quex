@@ -222,25 +222,9 @@ async fn sign_in(
 }
 
 #[derive(Template)]
-#[template(path = "sign_up.html")]
-struct SignUpTemplate {}
-
-#[derive(Template)]
 #[template(path = "auth/signin.html")]
 struct SignInTemplate {
     sign_in_with_google_url: Option<Url>,
-}
-
-async fn sign_up_handler(user: Option<AuthenticatedUser>) -> impl IntoResponse {
-    // Check if is already authenticated and redirect to surveys
-    // Ideally they should not land on the signup page if they are already authenticated
-    if user.is_some() {
-        return Redirect::to("/surveys").into_response();
-    }
-
-    let sign_up_template = SignUpTemplate {};
-
-    sign_up_template.into_response()
 }
 
 async fn sign_in_handler(
@@ -483,7 +467,6 @@ async fn complete_signup(
 
 pub(crate) fn create_router() -> Router<AppState> {
     Router::new()
-        .route("/signup", get(sign_up_handler).post(create_account))
         .route("/signup/completed", get(signup_completed))
         .route("/signin", get(sign_in_handler).post(sign_in))
         .route("/signin/completed", get(signin_completed))
