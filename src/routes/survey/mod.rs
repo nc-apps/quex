@@ -381,7 +381,7 @@ async fn create_survey(
 }
 
 #[derive(Template)]
-#[template(path = "thanks.html")]
+#[template(path = "surveys/responses/thanks.html")]
 struct ThanksTemplate {}
 
 async fn thanks() -> impl IntoResponse {

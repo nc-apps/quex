@@ -18,7 +18,6 @@ use tracing_subscriber::util::SubscriberInitExt;
 
 mod auth;
 mod database;
-mod email;
 mod routes;
 
 #[derive(thiserror::Error, Debug)]
