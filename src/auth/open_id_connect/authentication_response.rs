@@ -49,11 +49,19 @@ pub(in crate::auth) struct AuthenticationSuccess {
     scopes: Arc<str>,
 }
 
+/// This is very much like `Result<T, E>` but we can't mark that as untagged
+#[derive(Deserialize, Debug)]
+#[serde(untagged)]
+enum AuthenticationResult {
+    Success(AuthenticationSuccess),
+    Error(AuthenticationError),
+}
+
 #[derive(Deserialize, Debug)]
 pub(in crate::auth) struct AuthenticationResponse {
     state: AntiforgeryToken,
     #[serde(flatten)]
-    result: Result<AuthenticationSuccess, AuthenticationError>,
+    result: AuthenticationResult,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -141,20 +149,10 @@ pub(in crate::auth) async fn handle(
 
     tracing::debug!("Anti forgery token is valid");
 
-    // let response = match response {
-    //     AuthenticationResponse::Error(error) => {
-    //         tracing::error!(
-    //             "Error response from google: {:?} {:?} {:?}",
-    //             error.code,
-    //             error.description,
-    //             error.uri
-    //         );
-
-    //         return Err(HandleAuthenticationResponseError::ErrorResponse(error));
-    //     }
-    //     AuthenticationResponse::Success(response) => response,
-    // };
-    let response = response.result?;
+    let response = match response.result {
+        AuthenticationResult::Success(response) => response,
+        AuthenticationResult::Error(error) => return Err(error.into()),
+    };
 
     let url = Url::parse("https://accounts.google.com").unwrap();
     // Exchange code for access token
@@ -238,4 +236,21 @@ pub(in crate::auth) async fn handle(
     }
 
     Ok(Redirect::to(&url).into_response())
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn can_deserialize() {
+        let query = "error=invalid_request&error_description=Invalid+request&state=123";
+
+        let response: AuthenticationError = serde_urlencoded::from_str(query).unwrap();
+        let response: AuthenticationResponse = serde_urlencoded::from_str(query).unwrap();
+
+        let query = "code=123&scope=openid+email&state=123";
+        let response: AuthenticationSuccess = serde_urlencoded::from_str(query).unwrap();
+        let response: AuthenticationResponse = serde_urlencoded::from_str(query).unwrap();
+    }
 }
