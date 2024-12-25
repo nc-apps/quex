@@ -30,21 +30,13 @@ pub(crate) mod open_id_connect;
 pub(crate) mod signer;
 mod token;
 
-const SIGNIN_ATTEMPT_LIFETIME: time::Duration = time::Duration::minutes(15);
-
-#[derive(Deserialize, Debug)]
-struct CreateAccountRequest {
-    email: String,
-    name: String,
-}
-
 #[derive(Template)]
 #[template(path = "auth/signin.html")]
 struct SignInTemplate {
     sign_in_with_google_url: Option<Url>,
 }
 
-async fn sign_in_handler(
+async fn get_sign_in_page(
     State(state): State<AppState>,
     user: Option<AuthenticatedUser>,
 ) -> impl IntoResponse {
@@ -149,18 +141,15 @@ impl IntoResponse for CompleteSignInError {
 }
 
 #[derive(Template)]
-#[template(path = "auth/complete_signin.html")]
+#[template(path = "auth/complete signup.html")]
 struct CompleteSigninTemplate {
     name: Option<Arc<str>>,
-    email_address: Option<Arc<str>>,
     token: Arc<str>,
     request_data_url: Option<Url>,
 }
 
 #[derive(Deserialize, Debug)]
 struct CompleteSigninRequest {
-    #[serde(rename = "email")]
-    email_address: Option<Arc<str>>,
     name: Option<Arc<str>>,
 }
 
@@ -185,8 +174,8 @@ async fn get_complete_signup_page(
 
     let token = token.try_encode(&state.google_id_signer)?;
 
-    let request_data_url = if query.email_address.is_none() && query.name.is_none() {
-        let scopes = Scopes(["openid", "email", "profile"]);
+    let request_data_url = if query.name.is_none() {
+        let scopes = Scopes(["openid", "profile"]);
         get_sign_in_with_google_url(&state, scopes)
             .await
             .inspect_err(|error| {
@@ -198,7 +187,6 @@ async fn get_complete_signup_page(
     };
 
     Ok(CompleteSigninTemplate {
-        email_address: query.email_address,
         name: query.name,
         token: Arc::from(token),
         request_data_url,
@@ -208,8 +196,6 @@ async fn get_complete_signup_page(
 #[derive(Deserialize, Debug)]
 struct CompleteSignUpRequest {
     name: Arc<str>,
-    #[serde(rename = "email")]
-    email_address: Arc<str>,
     token: Arc<str>,
 }
 
@@ -245,11 +231,10 @@ async fn complete_signup(
     state
         .connection
         .execute(
-            "INSERT INTO users (id, name, email_address) VALUES (:id, :name, :email_address)",
+            "INSERT INTO users (id, name) VALUES (:id, :name)",
             named_params![
                 ":id": user_id.clone(),
                 ":name": request.name,
-                ":email_address": request.email_address.clone(),
             ],
         )
         .await
@@ -274,6 +259,7 @@ async fn complete_signup(
 
 pub(crate) fn create_router() -> Router<AppState> {
     Router::new()
+        .route("/signin", get(get_sign_in_page))
         // Sign out has to be post to prevent other sites from signing users out by linking to the sign out link
         // (See SameSite lax and CRSF)
         .route("/signout", post(sign_out))

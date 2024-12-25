@@ -19,7 +19,7 @@ dotenvy = "0.15.7"
 libsql = "0.3.5"
 # Better ids than UUIDs
 nanoid = "0.4.0"
-# HTTP requests for API calls like sending emails through a service
+# HTTP requests for API calls to external services like the OpenID Connect provider
 reqwest = { version = "0.12.4", features = ["json"] }
 # Ser[ialization]/de[serialization]
 serde = "1.0.201"

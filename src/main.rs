@@ -97,12 +97,9 @@ async fn main() -> Result<(), AppError> {
     // Set up database
     let connection = database::initialize_database().await;
 
-    // Set up background workers
-    let _handle = tokio::spawn(collect_garbage(connection.clone()));
-
     // Configuration
     //TODO implement fallback to localhost
-    //TODO implement warning that users can not follow links (e.g. in emails) if host is localhost or 127.0.0.1
+    //TODO implement warning that users can not follow links if host is localhost or 127.0.0.1
     let url = env::var("QUEX_URL").map_err(AppError::NoUrlConfigured)?;
 
     let url = Uri::try_from(url)?;
@@ -192,7 +189,7 @@ struct ClientCredentials {
 #[derive(Clone)]
 pub(crate) struct Configuration {
     /// The server URL under which the server can be reached publicly for clients.
-    /// A user clicking an email link will be brought to this URL.
+    /// Used by various systems that need to provide an url to users.
     server_url: Uri,
     /// Google Auth Platform Client id and secret for OpenID Connect authenticaton flow
     client_credentials: Option<ClientCredentials>,
@@ -207,34 +204,6 @@ pub(crate) struct AppState {
     discovery_cache: discovery::DocumentCache,
     google_id_signer: Signer,
     pub(crate) cookie_key: cookie::Key,
-}
-
-/// Runs forever and cleans up expired app data about every 5 minutes
-async fn collect_garbage(connection: Connection) {
-    // It is not important that it cleans exactly every 5 minutes, but it is important that it happens regularly
-    // Duration from minutes is experimental currently
-    let mut interval = tokio::time::interval(Duration::from_secs(5 * 60));
-    loop {
-        interval.tick().await;
-        let now = time::OffsetDateTime::now_utc().unix_timestamp();
-        // Clean up expired sessions
-        connection
-            .execute(
-                "DELETE FROM sessions WHERE expires_at_utc < :now",
-                named_params![":now": now],
-            )
-            .await
-            .expect("Failed to delete expired sessions");
-
-        // Clean up expired sign in attempts
-        connection
-            .execute(
-                "DELETE FROM signin_attempts WHERE expires_at_utc < :now",
-                named_params![":now": now],
-            )
-            .await
-            .expect("Failed to delete expired signin attempts");
-    }
 }
 
 async fn shutdown_signal() {

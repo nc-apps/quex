@@ -23,7 +23,6 @@ erDiagram
     RESEARCHER {
         text id PK
         string name
-        string email_address
     }
 
     SYSTEM-USABILITY-SCORE-SURVEY {

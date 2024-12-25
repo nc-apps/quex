@@ -222,17 +222,8 @@ pub(in crate::auth) async fn handle(
 
     // These values can be changed by the user in the next sign up step
     // so they don't need to be signed
-    match (claims.email, claims.name) {
-        (Some(email), Some(name)) => {
-            url.push_str(&format!("?email={}&name={}", email, name));
-        }
-        (Some(email), None) => {
-            url.push_str(&format!("?email={}", email));
-        }
-        (None, Some(name)) => {
-            url.push_str(&format!("?name={}", name));
-        }
-        (None, None) => {}
+    if let Some(name) = claims.name {
+        url.push_str(&format!("?name={}", name));
     }
 
     Ok(Redirect::to(&url).into_response())
