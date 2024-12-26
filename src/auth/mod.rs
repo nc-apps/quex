@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use crate::AppState;
 use askama_axum::{IntoResponse, Template};
+use authenticated_user::AuthenticatedUser;
 use axum::routing::post;
 use axum::{
     extract::{Query, State},
