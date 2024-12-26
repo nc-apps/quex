@@ -22,8 +22,6 @@ use time::{Duration, OffsetDateTime};
 use token::complete_signin::{CompleteSignInToken, DecodeTokenError, EncodeTokenError};
 use url::Url;
 
-use self::authenticated_user::AuthenticatedUser;
-
 pub(crate) mod authenticated_user;
 pub(crate) mod cookie;
 pub(crate) mod open_id_connect;
