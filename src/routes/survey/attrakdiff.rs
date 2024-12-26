@@ -1,14 +1,17 @@
 use crate::auth::authenticated_user::AuthenticatedUser;
 use crate::routes::create_share_link;
+use crate::routes::survey::get_file_name;
 use crate::AppState;
 use askama::Template;
 use askama_axum::IntoResponse;
 use axum::extract::{Path, State};
+use axum::http::HeaderMap;
 use axum::response::Redirect;
 use axum::Form;
 use libsql::named_params;
 use nanoid::nanoid;
-use reqwest::StatusCode;
+use reqwest::header::HeaderValue;
+use reqwest::{header, StatusCode};
 use serde::Deserialize;
 use std::sync::Arc;
 use time::OffsetDateTime;
@@ -419,7 +422,7 @@ pub(super) async fn get_results_page(
 pub(super) async fn download_results(
     State(state): State<AppState>,
     Path(survey_id): Path<String>,
-) -> Result<String, StatusCode> {
+) -> Result<(HeaderMap, String), StatusCode> {
     let result = state
         .connection
         .query(
@@ -445,8 +448,8 @@ pub(super) async fn download_results(
         match result {
             Ok(None) => break,
             Ok(Some(row)) => {
-                for i in 2i32..30 {
-                    let answer = row.get::<i32>(i);
+                for index in 2u8..30 {
+                    let answer = row.get::<i32>(index.into());
                     let answer = match answer {
                         Ok(answer) => answer,
                         Err(error) => {
@@ -469,7 +472,14 @@ pub(super) async fn download_results(
             }
         }
     }
-    tracing::debug!("csv: {:?}", csv);
 
-    return Ok(csv);
+    let mut headers = HeaderMap::new();
+    const TEXT_CSV: HeaderValue = HeaderValue::from_static("text/csv");
+    headers.insert(header::CONTENT_TYPE, TEXT_CSV);
+    // The survey id should be URL safe and ASCII only by default
+    let value = format!("attachment; filename=\"{}\"", get_file_name(&survey_id));
+    let value = HeaderValue::try_from(value).expect("Invalid characters in survey id");
+    headers.insert(header::CONTENT_DISPOSITION, value);
+
+    Ok((headers, csv))
 }
