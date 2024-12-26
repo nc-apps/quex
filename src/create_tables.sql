@@ -1,14 +1,11 @@
 BEGIN;
 
-CREATE TABLE IF NOT EXISTS users (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL
-);
+CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, name TEXT NOT NULL);
 
 CREATE TABLE IF NOT EXISTS google_account_connections (
     google_user_id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,
-    FOREIGN KEY(user_id) REFERENCES users(id)
+    FOREIGN KEY (user_id) REFERENCES users (id)
 );
 
 CREATE TABLE IF NOT EXISTS system_usability_score_surveys (
@@ -16,7 +13,7 @@ CREATE TABLE IF NOT EXISTS system_usability_score_surveys (
     user_id TEXT NOT NULL,
     name TEXT NOT NULL,
     created_at_utc INTEGER NOT NULL,
-    FOREIGN KEY(user_id) REFERENCES users(id)
+    FOREIGN KEY (user_id) REFERENCES users (id)
 );
 
 CREATE TABLE IF NOT EXISTS net_promoter_score_surveys (
@@ -24,7 +21,7 @@ CREATE TABLE IF NOT EXISTS net_promoter_score_surveys (
     user_id TEXT NOT NULL,
     name TEXT NOT NULL,
     created_at_utc INTEGER NOT NULL,
-    FOREIGN KEY(user_id) REFERENCES users(id)
+    FOREIGN KEY (user_id) REFERENCES users (id)
 );
 
 CREATE TABLE IF NOT EXISTS attrakdiff_surveys (
@@ -32,12 +29,13 @@ CREATE TABLE IF NOT EXISTS attrakdiff_surveys (
     user_id TEXT NOT NULL,
     name TEXT NOT NULL,
     created_at_utc INTEGER NOT NULL,
-    FOREIGN KEY (user_id) REFERENCES users(id)
+    FOREIGN KEY (user_id) REFERENCES users (id)
 );
 
 CREATE TABLE IF NOT EXISTS system_usability_score_responses (
     id TEXT PRIMARY KEY,
     survey_id INTEGER NOT NULL,
+    created_at_utc INTEGER NOT NULL,
     answer_1 INTEGER NOT NULL,
     answer_2 INTEGER NOT NULL,
     answer_3 INTEGER NOT NULL,
@@ -48,20 +46,22 @@ CREATE TABLE IF NOT EXISTS system_usability_score_responses (
     answer_8 INTEGER NOT NULL,
     answer_9 INTEGER NOT NULL,
     answer_10 INTEGER NOT NULL,
-    FOREIGN KEY (survey_id) REFERENCES system_usability_score_surveys(id)
+    FOREIGN KEY (survey_id) REFERENCES system_usability_score_surveys (id)
 );
 
 CREATE TABLE IF NOT EXISTS net_promoter_score_responses (
     id TEXT PRIMARY KEY,
     survey_id INTEGER NOT NULL,
+    created_at_utc INTEGER NOT NULL,
     answer_1 INTEGER NOT NULL,
     answer_2 TEXT,
-    FOREIGN KEY(survey_id) REFERENCES net_promoter_score_surveys(id)
+    FOREIGN KEY (survey_id) REFERENCES net_promoter_score_surveys (id)
 );
 
 CREATE TABLE IF NOT EXISTS attrakdiff_responses (
     id TEXT PRIMARY KEY,
     survey_id INTEGER NOT NULL,
+    created_at_utc INTEGER NOT NULL,
     answer_1 INTEGER NOT NULL,
     answer_2 INTEGER NOT NULL,
     answer_3 INTEGER NOT NULL,
@@ -90,7 +90,7 @@ CREATE TABLE IF NOT EXISTS attrakdiff_responses (
     answer_26 INTEGER NOT NULL,
     answer_27 INTEGER NOT NULL,
     answer_28 INTEGER NOT NULL,
-    FOREIGN KEY(survey_id) REFERENCES attrakdiff_surveys(id)
+    FOREIGN KEY (survey_id) REFERENCES attrakdiff_surveys (id)
 );
 
 END;

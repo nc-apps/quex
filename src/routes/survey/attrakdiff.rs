@@ -134,6 +134,7 @@ pub(super) async fn create_response(
 ) -> Redirect {
     tracing::debug!("Answers for AttrakDiff: {:?}", attrakdiff_answers);
     let response_id = nanoid!();
+    let now = OffsetDateTime::now_utc().unix_timestamp();
 
     app_state
         .connection
@@ -142,6 +143,7 @@ pub(super) async fn create_response(
             "INSERT INTO attrakdiff_responses (
                 id,
                 survey_id,
+                created_at_utc,
                 answer_1,
                 answer_2,
                 answer_3,
@@ -200,11 +202,13 @@ pub(super) async fn create_response(
                 ?27,
                 ?28,
                 ?29,
-                ?30
+                ?30,
+                ?31
             )",
             libsql::params![
                 response_id,
                 survey_id,
+                now,
                 attrakdiff_answers.q1,
                 attrakdiff_answers.q2,
                 attrakdiff_answers.q3,
@@ -375,13 +379,15 @@ pub(super) async fn get_results_page(
 
     let mut answers = Vec::new();
 
+    /// Offset for the fields that contain ids and timestamps
+    const META_DATA_OFFSET: usize = 3;
     loop {
         let result = rows.next().await;
         match result {
             Ok(Some(row)) => {
                 let mut response = [0; 28];
-                for index in 2u8..30 {
-                    let answer = row.get::<i32>(index.into());
+                for index in 0usize..28 {
+                    let answer = row.get::<i32>((META_DATA_OFFSET + index).try_into().unwrap());
                     let answer = match answer {
                         Ok(answer) => answer,
                         Err(error) => {
@@ -390,7 +396,7 @@ pub(super) async fn get_results_page(
                             return Redirect::to("/surveys").into_response();
                         }
                     };
-                    response[index as usize - 2] = answer;
+                    response[index] = answer;
                 }
                 answers.push(response);
             }
