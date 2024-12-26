@@ -13,7 +13,7 @@ use std::sync::Arc;
 use time::OffsetDateTime;
 
 #[derive(Template)]
-#[template(path = "sus.html")]
+#[template(path = "surveys/responses/system usability score.html")]
 struct SusTemplate {
     id: String,
 }
@@ -164,7 +164,7 @@ pub(super) async fn create_new_survey(
 //TODO consider renaming to evaluation or something more fitting
 /// The HTML template for the System Usability Score survey details and results page
 #[derive(Template)]
-#[template(path = "results/system usability score.html")]
+#[template(path = "surveys/results/system usability score.html")]
 struct SystemUsabilityScoreResultsTemplate {
     id: String,
     name: String,

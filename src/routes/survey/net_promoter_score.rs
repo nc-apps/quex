@@ -13,7 +13,7 @@ use std::sync::Arc;
 use time::OffsetDateTime;
 
 #[derive(Template)]
-#[template(path = "nps.html")]
+#[template(path = "surveys/responses/net promoter score.html")]
 struct NpsTemplate {
     id: String,
 }
@@ -115,7 +115,7 @@ pub(super) async fn create_new_survey(
 //TODO consider renaming to evaluation or something more fitting
 /// The HTML template for the Net Promoter Score survey details and results page
 #[derive(Template)]
-#[template(path = "results/net promoter score.html")]
+#[template(path = "surveys/results/net promoter score.html")]
 struct NetPromoterScoreResultsTemplate {
     id: String,
     name: String,

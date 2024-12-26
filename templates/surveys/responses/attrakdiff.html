@@ -1,5 +1,5 @@
-{% extends "layout.html" %}
-{% block title %}Index{% endblock %}
+{% extends "layouts/base.html" %}
+{% block title %}Quex{% endblock %}
 {% block content %}
 
 <form action="/q/{{ id }}" method="post">
@@ -17,7 +17,7 @@
             <label for="{{ id }}" class="block">
                 {% let id = format!("Q{}{}", question_index, answer_index) %}
                 <input id="{{ id }}" name="Q{{ question_index }}" type="radio" value="{{ answer_index }}" required
-                    class="block w-4 h-4 p-2 mx-auto text-indigo-600 border-gray-300 focus:ring-indigo-600">
+                    class="block w-4 h-4 p-2 mx-auto text-blue-600 border-gray-300 focus:ring-blue-600">
                 <span class="block text-sm font-medium leading-6 text-center text-gray-900">
                     {{ answer_index }}
                 </span>
@@ -28,7 +28,7 @@
     </div>
     <div class="flex items-center justify-end mt-6 gap-x-6">
         <button type="submit"
-            class="px-3 py-2 text-sm font-semibold text-white bg-indigo-600 rounded-md shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">Submit</button>
+            class="px-3 py-2 text-sm font-semibold text-white bg-blue-600 rounded-md shadow-sm hover:bg-blue-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">Submit</button>
     </div>
 </form>
 
