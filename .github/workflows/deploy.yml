@@ -1,0 +1,23 @@
+name: Deploy Development Environment
+
+concurrency:
+  group: development
+  cancel-in-progress: true
+
+on:
+  registry_package:
+    types: [updated, published]
+  # Allow manual update
+  workflow_dispatch:
+  workflow_call:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: development
+      url: https://melt.claa.sh/
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call' || github.event.registry_package.package_version.container_metadata.tag.name == 'quex'
+    steps:
+      - name: deploy
+        run: 'curl --fail --show-error -H "Authorization: Bearer ${{ secrets.QUEX_TOKEN }}" https://tugboat.claa.sh/update'

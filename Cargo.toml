@@ -16,11 +16,16 @@ base64 = "0.22.1"
 # For environment variables
 dotenvy = "0.15.7"
 # Database and Turso
-libsql = "0.3.5"
+libsql = "0.6.0"
 # Better ids than UUIDs
 nanoid = "0.4.0"
 # HTTP requests for API calls to external services like the OpenID Connect provider
-reqwest = { version = "0.12.4", features = ["json"] }
+reqwest = { version = "0.12.4", features = [
+    "json",
+    "rustls-tls",
+    "http2",
+    # Need to get openssl dependency out or the app won't start in container without OpenSSL
+], default-features = false }
 # Ser[ialization]/de[serialization]
 serde = "1.0.201"
 # For time things like expiration dates
@@ -28,12 +33,12 @@ time = { version = "0.3.36", features = ["serde"] }
 # Async runtime
 tokio = { version = "1.37.0", features = ["full"] }
 # Tokio utilities like file system access
-tower-http = { version = "0.5.2", features = ["fs"] }
+tower-http = { version = "0.6.2", features = ["fs"] }
 # For logging and telemetry to get better insights into what is going on inisde the app
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 # Useful macros to make implementing errors easier
-thiserror = "1.0.61"
+thiserror = "2.0.9"
 # For Date and Time formatting based on locale information
 icu = "1.5.0"
 # For generating Nonces and anti forgery tokens for OAuth/OpenID Connect requests for authentication/sign-in
