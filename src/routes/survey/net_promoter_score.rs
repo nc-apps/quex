@@ -265,33 +265,30 @@ pub(super) async fn download_results(
     loop {
         let result = rows.next().await;
         match result {
-            Ok(None) => break, // Keine weiteren Zeilen
+            Ok(None) => break,
             Ok(Some(row)) => {
-                let mut row_values = Vec::new(); // Sammeln der Werte der aktuellen Zeile
+                let result = row.get::<i32>(2);
 
-                for i in 2..4 {
-                    // Schleife über die relevanten Spalten
-                    let value: String = match row.get::<Option<i32>>(i) {
-                        // Versuche, einen Integer zu lesen
-                        Ok(Some(num)) => num.to_string(), // Wenn es ein `i32` ist, wandle ihn in einen String
-                        Ok(None) => "NULL".to_string(),   // Falls der Wert `NULL` ist
-                        Err(_) => match row.get::<Option<String>>(i) {
-                            // Falls kein `i32`, versuche String
-                            Ok(Some(text)) => text,
-                            Ok(None) => "NULL".to_string(), // Falls auch der String `NULL` ist
-                            Err(error) => {
-                                tracing::error!("Error reading value at index {}: {:?}", i, error);
-                                return Err(StatusCode::INTERNAL_SERVER_ERROR);
-                            }
-                        },
-                    };
+                let value1 = match result {
+                    Ok(value) => value.to_string(),
+                    Err(error) => {
+                        tracing::error!("Error reading value at index 2: {:?}", error);
+                        return Err(StatusCode::INTERNAL_SERVER_ERROR);
+                    }
+                };
 
-                    row_values.push(value); // Hinzufügen des Werts in die Liste
-                }
+                let result = row.get::<String>(3);
+
+                let value2 = match result {
+                    Ok(value) => value,
+                    Err(error) => {
+                        tracing::error!("Error reading value at index 3: {:?}", error);
+                        return Err(StatusCode::INTERNAL_SERVER_ERROR);
+                    }
+                };
 
                 // Füge alle Werte der Zeile als CSV hinzu
-                csv += &row_values.join(", ");
-                csv.push('\n');
+                csv += &format!("{}, {}\n", value1, value2);
             }
             Err(error) => {
                 tracing::error!("Error reading query result: {:?}", error);
