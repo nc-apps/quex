@@ -8,6 +8,7 @@ use axum::response::Redirect;
 use axum::Form;
 use libsql::named_params;
 use nanoid::nanoid;
+use reqwest::StatusCode;
 use serde::Deserialize;
 use std::sync::Arc;
 use time::OffsetDateTime;
@@ -237,4 +238,66 @@ pub(super) async fn get_results_page(
         survey_url,
     }
     .into_response()
+}
+
+pub(super) async fn download_results(
+    State(state): State<AppState>,
+    Path(survey_id): Path<String>,
+) -> Result<String, StatusCode> {
+    let result = state
+        .connection
+        .query(
+            "SELECT * FROM net_promoter_score_responses WHERE survey_id = :survey_id",
+            named_params![":survey_id": survey_id.clone()],
+        )
+        .await;
+
+    let mut rows = match result {
+        Ok(rows) => rows,
+        Err(error) => {
+            tracing::error!("Error querying for Net Promoter Score survey: {:?}", error);
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
+
+    let mut csv = String::new();
+    csv += "How likely are you to recommend us on a scale from 0 to 10?, And why?\n";
+
+    loop {
+        let result = rows.next().await;
+        match result {
+            Ok(None) => break,
+            Ok(Some(row)) => {
+                let result = row.get::<i32>(2);
+
+                let value1 = match result {
+                    Ok(value) => value.to_string(),
+                    Err(error) => {
+                        tracing::error!("Error reading value at index 2: {:?}", error);
+                        return Err(StatusCode::INTERNAL_SERVER_ERROR);
+                    }
+                };
+
+                let result = row.get::<String>(3);
+
+                let value2 = match result {
+                    Ok(value) => value,
+                    Err(error) => {
+                        tracing::error!("Error reading value at index 3: {:?}", error);
+                        return Err(StatusCode::INTERNAL_SERVER_ERROR);
+                    }
+                };
+
+                // Füge alle Werte der Zeile als CSV hinzu
+                csv += &format!("{}, {}\n", value1, value2);
+            }
+            Err(error) => {
+                tracing::error!("Error reading query result: {:?}", error);
+                return Err(StatusCode::INTERNAL_SERVER_ERROR);
+            }
+        }
+    }
+
+    tracing::debug!("csv: {:?}", csv);
+    Ok(csv)
 }

@@ -23,8 +23,16 @@ pub(crate) fn create_router() -> Router<AppState> {
     let survey_routes = Router::new()
         .route("/nps", post(net_promoter_score::create_new_survey))
         .route("/nps/:id", get(net_promoter_score::get_results_page))
+        .route(
+            "/nps/:id/download",
+            get(net_promoter_score::download_results),
+        )
         .route("/sus", post(system_usability_score::create_new_survey))
         .route("/sus/:id", get(system_usability_score::get_results_page))
+        .route(
+            "/sus/:id/download",
+            get(system_usability_score::download_results),
+        )
         .route("/ad", post(attrakdiff::create_new_survey))
         .route("/ad/:id", get(attrakdiff::get_results_page))
         .route("/ad/:id/download", get(attrakdiff::download_results));
