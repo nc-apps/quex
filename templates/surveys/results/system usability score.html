@@ -131,6 +131,10 @@
                             <tr>
                                 <th scope="col"
                                     class="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-0">
+                                    Score
+                                </th>
+                                <th scope="col"
+                                    class="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-0">
                                     I think that I would like to use this system frequently
                                 </th>
                                 <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
@@ -167,6 +171,9 @@
                         <tbody class="divide-y divide-gray-200">
                             {% for response in responses %}
                             <tr>
+                                <td class="py-4 pl-4 pr-3 text-sm font-medium text-gray-900 whitespace-nowrap sm:pl-0">
+                                    {{ response.score }}
+                                </td>
                                 {% for score in response.scores %}
                                 {% if loop.first %}
                                 <td class="py-4 pl-4 pr-3 text-sm font-medium text-gray-900 whitespace-nowrap sm:pl-0">
