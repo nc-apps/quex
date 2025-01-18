@@ -8,6 +8,7 @@ async fn create_database() -> Database {
 
 #[cfg(not(debug_assertions))]
 async fn create_database() -> Database {
+    use std::env;
     let url = env::var("TURSO_DATABASE_URL")
         .expect("TURSO_DATABASE_URL environment variable must be set. Did you forget to set up the .env file?");
     let token = env::var("TURSO_AUTH_TOKEN").unwrap_or_default();

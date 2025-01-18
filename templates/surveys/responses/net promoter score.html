@@ -1,11 +1,9 @@
-{% extends "layout.html" %}
+{% extends "layouts/authenticated.html" %}
 
 {% block title %}Index{% endblock %}
 
 {% block content %}
-<h1>Net Promoter Score</h1>
-<a href="/">Home</a>
-<form action="/q/{{ id }}" method="post">
+<form action="/q/{{ id }}" method="post"  class="max-w-3xl px-4 py-4 mx-auto sm:px-6 lg:px-8">
     <fieldset>
         <legend>How likely are you to recommend us on a scale from 0 to 10?</legend>
 

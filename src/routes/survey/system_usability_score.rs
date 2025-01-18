@@ -14,7 +14,7 @@ use std::sync::Arc;
 use time::OffsetDateTime;
 
 #[derive(Template)]
-#[template(path = "sus.html")]
+#[template(path = "surveys/responses/system usability score.html")]
 struct SusTemplate {
     id: String,
 }
@@ -56,13 +56,14 @@ pub(super) async fn create_response(
 ) -> Redirect {
     tracing::debug!("Answers for SUS: {:?}", sus_answers);
     let response_id = nanoid!();
-
+    let now = OffsetDateTime::now_utc().unix_timestamp();
     app_state
         .connection
         .execute(
             "INSERT INTO system_usability_score_responses (
                 id,
                 survey_id,
+                created_at_utc,
                 answer_1,
                 answer_2,
                 answer_3,
@@ -85,10 +86,12 @@ pub(super) async fn create_response(
                 ?9,
                 ?10,
                 ?11,
-                ?12)",
+                ?12,
+                ?13)",
             libsql::params![
                 response_id,
                 survey_id,
+                now,
                 sus_answers.q1,
                 sus_answers.q2,
                 sus_answers.q3,
@@ -165,7 +168,7 @@ pub(super) async fn create_new_survey(
 //TODO consider renaming to evaluation or something more fitting
 /// The HTML template for the System Usability Score survey details and results page
 #[derive(Template)]
-#[template(path = "results/system usability score.html")]
+#[template(path = "surveys/results/system usability score.html")]
 struct SystemUsabilityScoreResultsTemplate {
     id: String,
     name: String,
@@ -242,22 +245,25 @@ pub(super) async fn get_results_page(
 
     let mut answers = Vec::new();
 
+    /// The offset of the metadata columns in the database
+    const METADATA_OFFSET: usize = 3;
+
     loop {
         let result = rows.next().await;
         match result {
             Ok(Some(row)) => {
                 let mut response = [0; 10];
-                for i in 0usize..10 {
-                    let answer = row.get::<i32>((i + 2).try_into().unwrap());
+                for index in 0usize..10 {
+                    let answer = row.get::<i32>((METADATA_OFFSET + index).try_into().unwrap());
                     let answer = match answer {
                         Ok(answer) => answer,
                         Err(error) => {
-                            tracing::error!("Error reading response number {i}: {error:?}");
+                            tracing::error!("Error reading response number {index}: {error:?}");
                             //TODO display user error message it's not their fault
                             return Redirect::to("/surveys").into_response();
                         }
                     };
-                    response[i] = answer;
+                    response[index] = answer;
                 }
                 answers.push(response);
             }

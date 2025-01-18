@@ -1,0 +1,18 @@
+{% extends "layouts/base.html" %}
+{% block header %}
+<header class="grid grid-cols-[1fr_auto_auto] gap-x-4 items-center h-16 bg-white shadow py-2 px-4 sm:px-6 lg:px-8">
+    <a href="/">
+        <h1 class="inline-block text-3xl font-bold leading-9 tracking-tight text-blue-900">Quex</h1>
+    </a>
+    <a href="/surveys/new"
+        class="inline-flex items-center px-3 py-2 text-sm font-semibold text-white bg-blue-600 rounded-md shadow-sm hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">Create
+        survey</a>
+
+    <form action="/signout" method="post" class="contents">
+        <button type="submit"
+            class="px-3 py-2 text-sm font-semibold text-gray-900 bg-white rounded-md shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50">Sign
+            out</button>
+    </form>
+</header>
+{% call super() %}
+{% endblock %}

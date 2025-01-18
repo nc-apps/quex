@@ -10,29 +10,50 @@ askama_axum = "0.4.0"
 # Web server framework
 axum = "0.7.5"
 # Useful utilities like cookies
-axum-extra = { version = "0.9.3", features = ["cookie"] }
+axum-extra = { version = "0.9.3", features = ["cookie-signed"] }
 # Binary encoding/decoding
 base64 = "0.22.1"
 # For environment variables
-dotenv = "0.15.0"
+dotenvy = "0.15.7"
 # Database and Turso
-libsql = "0.3.5"
+libsql = "0.6.0"
 # Better ids than UUIDs
 nanoid = "0.4.0"
-# HTTP requests for API calls like sending emails through a service
-reqwest = { version = "0.12.4", features = ["json"] }
+# HTTP requests for API calls to external services like the OpenID Connect provider
+reqwest = { version = "0.12.4", features = [
+    "json",
+    "rustls-tls",
+    "http2",
+    # Need to get openssl dependency out or the app won't start in container without OpenSSL
+], default-features = false }
 # Ser[ialization]/de[serialization]
 serde = "1.0.201"
 # For time things like expiration dates
-time = "0.3.36"
+time = { version = "0.3.36", features = ["serde"] }
 # Async runtime
 tokio = { version = "1.37.0", features = ["full"] }
 # Tokio utilities like file system access
-tower-http = { version = "0.5.2", features = ["fs"] }
+tower-http = { version = "0.6.2", features = ["fs"] }
 # For logging and telemetry to get better insights into what is going on inisde the app
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 # Useful macros to make implementing errors easier
-thiserror = "1.0.61"
+thiserror = "2.0.9"
 # For Date and Time formatting based on locale information
 icu = "1.5.0"
+# For generating Nonces and anti forgery tokens for OAuth/OpenID Connect requests for authentication/sign-in
+getrandom = "0.2.15"
+# For easier URL handling especially in serialized formats
+url = { version = "2.5.4", features = ["serde"] }
+# For (de)serializing URL query parameters
+serde_urlencoded = "0.7.1"
+# For signing anti forgery tokens used in authentication
+hmac = "0.12.1"
+# Used by HMAC for signing
+sha2 = "0.10.8"
+# For validating identity tokens for OpenID Connect
+jsonwebtoken = "9.3.0"
+# More efficient serialization/deserialization format than JSON used in our stateful cookies
+postcard = { version = "1.1.1", default-features = false, features = ["alloc"] }
+# Helpful for baking cookies
+cookie = "0.18.1"

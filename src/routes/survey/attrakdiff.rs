@@ -1,21 +1,24 @@
 use crate::auth::authenticated_user::AuthenticatedUser;
 use crate::routes::create_share_link;
+use crate::routes::survey::get_file_name;
 use crate::AppState;
 use askama::Template;
 use askama_axum::IntoResponse;
 use axum::extract::{Path, State};
+use axum::http::HeaderMap;
 use axum::response::Redirect;
 use axum::Form;
 use libsql::named_params;
 use nanoid::nanoid;
-use reqwest::StatusCode;
+use reqwest::header::HeaderValue;
+use reqwest::{header, StatusCode};
 use serde::Deserialize;
 use std::sync::Arc;
 use time::OffsetDateTime;
 
 /// The HTML template for the AttrakDiff survey
 #[derive(Template)]
-#[template(path = "attrakdiff.html")]
+#[template(path = "surveys/responses/attrakdiff.html")]
 struct AttrakDiffTemplate {
     id: String,
     questions: Vec<(String, String)>,
@@ -131,6 +134,7 @@ pub(super) async fn create_response(
 ) -> Redirect {
     tracing::debug!("Answers for AttrakDiff: {:?}", attrakdiff_answers);
     let response_id = nanoid!();
+    let now = OffsetDateTime::now_utc().unix_timestamp();
 
     app_state
         .connection
@@ -139,6 +143,7 @@ pub(super) async fn create_response(
             "INSERT INTO attrakdiff_responses (
                 id,
                 survey_id,
+                created_at_utc,
                 answer_1,
                 answer_2,
                 answer_3,
@@ -197,11 +202,13 @@ pub(super) async fn create_response(
                 ?27,
                 ?28,
                 ?29,
-                ?30
+                ?30,
+                ?31
             )",
             libsql::params![
                 response_id,
                 survey_id,
+                now,
                 attrakdiff_answers.q1,
                 attrakdiff_answers.q2,
                 attrakdiff_answers.q3,
@@ -296,7 +303,7 @@ pub(super) async fn create_new_survey(
 //TODO consider renaming to evaluation or something more fitting
 /// The HTML template for the AttrakDiff survey details and results page
 #[derive(Template)]
-#[template(path = "results/attrakdiff.html")]
+#[template(path = "surveys/results/attrakdiff.html")]
 struct AttrakdiffResultsTemplate {
     id: String,
     name: String,
@@ -372,22 +379,24 @@ pub(super) async fn get_results_page(
 
     let mut answers = Vec::new();
 
+    /// Offset for the fields that contain ids and timestamps
+    const META_DATA_OFFSET: usize = 3;
     loop {
         let result = rows.next().await;
         match result {
             Ok(Some(row)) => {
                 let mut response = [0; 28];
-                for i in 0usize..28 {
-                    let answer = row.get::<i32>((i + 2).try_into().unwrap());
+                for index in 0usize..28 {
+                    let answer = row.get::<i32>((META_DATA_OFFSET + index).try_into().unwrap());
                     let answer = match answer {
                         Ok(answer) => answer,
                         Err(error) => {
-                            tracing::error!("Error reading answer number {i}: {error:?}");
+                            tracing::error!("Error reading answer number {index}: {error:?}");
                             //TODO display user error message it's not their fault
                             return Redirect::to("/surveys").into_response();
                         }
                     };
-                    response[i] = answer;
+                    response[index] = answer;
                 }
                 answers.push(response);
             }
@@ -413,7 +422,7 @@ pub(super) async fn get_results_page(
 pub(super) async fn download_results(
     State(state): State<AppState>,
     Path(survey_id): Path<String>,
-) -> Result<String, StatusCode> {
+) -> Result<(HeaderMap, String), StatusCode> {
     let result = state
         .connection
         .query(
@@ -439,8 +448,8 @@ pub(super) async fn download_results(
         match result {
             Ok(None) => break,
             Ok(Some(row)) => {
-                for i in 2i32..30 {
-                    let answer = row.get::<i32>(i);
+                for index in 2u8..30 {
+                    let answer = row.get::<i32>(index.into());
                     let answer = match answer {
                         Ok(answer) => answer,
                         Err(error) => {
@@ -463,7 +472,14 @@ pub(super) async fn download_results(
             }
         }
     }
-    tracing::debug!("csv: {:?}", csv);
 
-    return Ok(csv);
+    let mut headers = HeaderMap::new();
+    const TEXT_CSV: HeaderValue = HeaderValue::from_static("text/csv");
+    headers.insert(header::CONTENT_TYPE, TEXT_CSV);
+    // The survey id should be URL safe and ASCII only by default
+    let value = format!("attachment; filename=\"{}\"", get_file_name(&survey_id));
+    let value = HeaderValue::try_from(value).expect("Invalid characters in survey id");
+    headers.insert(header::CONTENT_DISPOSITION, value);
+
+    Ok((headers, csv))
 }

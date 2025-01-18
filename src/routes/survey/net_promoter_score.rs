@@ -14,7 +14,7 @@ use std::sync::Arc;
 use time::OffsetDateTime;
 
 #[derive(Template)]
-#[template(path = "nps.html")]
+#[template(path = "surveys/responses/net promoter score.html")]
 struct NpsTemplate {
     id: String,
 }
@@ -40,14 +40,15 @@ pub(super) async fn create_response(
 ) -> Redirect {
     tracing::debug!("Answers for NPS: {:?}", nps_answers);
     let response_id = nanoid!();
-
+    let now = OffsetDateTime::now_utc().unix_timestamp();
     app_state
         .connection
         .execute(
-            "INSERT INTO net_promoter_score_responses (id, survey_id, answer_1, answer_2) VALUES (:id, :survey_id, :answer_1, :answer_2)",
+            "INSERT INTO net_promoter_score_responses (id, created_at_utc, survey_id, answer_1, answer_2) VALUES (:id, :survey_id, :created_at_utc, :answer_1, :answer_2)",
             libsql::named_params! {
                 ":id": response_id,
                 ":survey_id": survey_id,
+                ":created_at_utc": now,
                 ":answer_1": nps_answers.q1,
                 ":answer_2": nps_answers.q2,
             },
@@ -116,7 +117,7 @@ pub(super) async fn create_new_survey(
 //TODO consider renaming to evaluation or something more fitting
 /// The HTML template for the Net Promoter Score survey details and results page
 #[derive(Template)]
-#[template(path = "results/net promoter score.html")]
+#[template(path = "surveys/results/net promoter score.html")]
 struct NetPromoterScoreResultsTemplate {
     id: String,
     name: String,
@@ -198,7 +199,7 @@ pub(super) async fn get_results_page(
         let result = rows.next().await;
         match result {
             Ok(Some(row)) => {
-                let answer_1 = row.get::<i32>(2);
+                let answer_1 = row.get::<i32>(3);
                 let answer_1 = match answer_1 {
                     Ok(answer_1) => answer_1,
                     Err(error) => {
@@ -208,7 +209,7 @@ pub(super) async fn get_results_page(
                     }
                 };
 
-                let answer_2 = row.get::<String>(3);
+                let answer_2 = row.get::<String>(4);
                 let answer_2 = match answer_2 {
                     Ok(answer_2) => answer_2,
                     Err(error) => {
