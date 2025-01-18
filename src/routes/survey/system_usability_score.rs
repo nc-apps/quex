@@ -10,6 +10,7 @@ use libsql::named_params;
 use nanoid::nanoid;
 use reqwest::StatusCode;
 use serde::Deserialize;
+use std::ops::Mul;
 use std::sync::Arc;
 use time::OffsetDateTime;
 
@@ -26,7 +27,7 @@ pub(super) fn get_page(id: String) -> askama_axum::Response {
 }
 
 #[derive(Deserialize, Debug)]
-pub(super) struct Response {
+pub(super) struct CreateResponseRequest {
     #[serde(rename = "Q1")]
     q1: u8,
     #[serde(rename = "Q2")]
@@ -51,7 +52,7 @@ pub(super) struct Response {
 
 pub(super) async fn create_response(
     State(app_state): State<AppState>,
-    Form(sus_answers): Form<Response>,
+    Form(sus_answers): Form<CreateResponseRequest>,
     survey_id: String,
 ) -> Redirect {
     tracing::debug!("Answers for SUS: {:?}", sus_answers);
@@ -165,6 +166,21 @@ pub(super) async fn create_new_survey(
     Redirect::to(format!("/surveys/sus/{}", survey_id).as_ref())
 }
 
+struct Response {
+    scores: [u32; 10],
+    score: f64,
+}
+
+#[derive(Default)]
+struct Score {
+    mean: f64,
+    variance: f64,
+    standard_deviation: f64,
+    median: f64,
+    min: f64,
+    max: f64,
+}
+
 //TODO consider renaming to evaluation or something more fitting
 /// The HTML template for the System Usability Score survey details and results page
 #[derive(Template)]
@@ -172,8 +188,9 @@ pub(super) async fn create_new_survey(
 struct SystemUsabilityScoreResultsTemplate {
     id: String,
     name: String,
-    answers: Vec<[i32; 10]>,
+    responses: Vec<Response>,
     survey_url: String,
+    score: Score,
 }
 
 /// Gets the details page that displays the results of the survey and gives insights to the responses
@@ -248,24 +265,48 @@ pub(super) async fn get_results_page(
     /// The offset of the metadata columns in the database
     const METADATA_OFFSET: usize = 3;
 
+    let mut scores = Vec::new();
+
     loop {
         let result = rows.next().await;
         match result {
             Ok(Some(row)) => {
-                let mut response = [0; 10];
-                for index in 0usize..10 {
-                    let answer = row.get::<i32>((METADATA_OFFSET + index).try_into().unwrap());
-                    let answer = match answer {
+                let mut user_scores = [0; 10];
+                // User score out of 40
+                let mut score_sum = 0;
+                for answer_index in 0usize..10 {
+                    let answer = row.get((METADATA_OFFSET + answer_index).try_into().unwrap());
+                    let score = match answer {
                         Ok(answer) => answer,
                         Err(error) => {
-                            tracing::error!("Error reading response number {index}: {error:?}");
+                            tracing::error!(
+                                "Error reading response number {answer_index}: {error:?}"
+                            );
                             //TODO display user error message it's not their fault
                             return Redirect::to("/surveys").into_response();
                         }
                     };
-                    response[index] = answer;
+
+                    let is_positive_statement = answer_index % 2 == 0;
+                    if is_positive_statement {
+                        score_sum += score - 1;
+                    } else {
+                        score_sum += 5 - score;
+                    }
+
+                    user_scores[answer_index] = score;
                 }
-                answers.push(response);
+
+                // Score multiplied by 100 to get a percentage that can be displayed
+                let score = score_sum as f64 * 100.0 / 40.0;
+                // Make it to whole numbers with 2 decimal places e.g. 72.12 -> 7212 so we can sort it (floats are not sortable)
+                let score = (score * 100.0).round() as u64;
+                scores.push(score);
+                answers.push(Response {
+                    scores: user_scores,
+                    //TODO number formatting localization
+                    score: score as f64 / 100.0,
+                });
             }
             Ok(None) => break,
             Err(error) => {
@@ -276,12 +317,37 @@ pub(super) async fn get_results_page(
         }
     }
 
+    let score = if scores.len() > 0 {
+        let mean = scores.iter().sum::<u64>() as f64 / scores.len() as f64;
+        let variance = scores
+            .iter()
+            .map(|score| (*score as f64 - mean).powi(2))
+            .sum::<f64>()
+            / scores.len() as f64;
+        let standard_deviation = (variance).sqrt();
+        scores.sort_unstable();
+        let median = scores[scores.len() / 2] as f64 / 100.0;
+        let min = scores.iter().min().copied().unwrap() as f64 / 100.0;
+        let max = scores.iter().max().copied().unwrap() as f64 / 100.0;
+        Score {
+            mean: mean / 100.0,
+            variance: variance / 100.0,
+            standard_deviation: standard_deviation / 100.0,
+            median,
+            min,
+            max,
+        }
+    } else {
+        Score::default()
+    };
+
     let survey_url = create_share_link(&state.configuration.server_url, &survey_id);
     SystemUsabilityScoreResultsTemplate {
         id: survey_id,
         name,
-        answers,
+        responses: answers,
         survey_url,
+        score,
     }
     .into_response()
 }

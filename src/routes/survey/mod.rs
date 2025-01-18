@@ -318,9 +318,11 @@ async fn create_response(
             Ok(net_promoter_score::create_response(state, form, survey_id).await)
         }
         SurveyType::SystemUsabilityScore => {
-            let form = Form::<system_usability_score::Response>::from_request(request, &state)
-                .await
-                .map_err(|error| error.into_response())?;
+            let form = Form::<system_usability_score::CreateResponseRequest>::from_request(
+                request, &state,
+            )
+            .await
+            .map_err(|error| error.into_response())?;
             Ok(system_usability_score::create_response(state, form, survey_id).await)
         }
     }
