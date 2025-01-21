@@ -17,8 +17,8 @@ erDiagram
     ATTRAKDIFF-SURVEY 1--0+ ATTRAKDIFF-ANSWER : has
     NET-PROMOTER-SCORE-SURVEY 1--0+ NET-PROMOTER-SCORE-ANSWER : has
 
-    RESEARCHER 1--0+ SESSION : has
-    RESEARCHER 1--0+ SIGN-IN-ATTEMPT : has
+    RESEARCHER 0+--1 GOOGLE-ACCOUNT-CONNECTIONS : has
+
 
     RESEARCHER {
         text id PK
@@ -26,13 +26,16 @@ erDiagram
     }
 
     SYSTEM-USABILITY-SCORE-SURVEY {
-        integer id PK
+        text id PK
         text user_id FK
+        text name
+        integer created_at_utc
     }
 
     SYSTEM-USABILITY-SCORE-ANSWER {
-        integer id PK
+        text id PK
         integer survey_id FK
+        integer created_at_utc
         integer answer_1
         integer answer_2
         integer answer_3
@@ -46,13 +49,16 @@ erDiagram
     }
 
     ATTRAKDIFF-SURVEY {
-        integer id PK
+        text id PK
         text user_id FK
+        text name
+        integer created_at_utc
     }
 
     ATTRAKDIFF-ANSWER {
-        integer id PK
+        text id PK
         integer survey_id FK
+        integer created_at_utc
         integer answer_1
         integer answer_2
         integer answer_3
@@ -84,27 +90,23 @@ erDiagram
     }
 
     NET-PROMOTER-SCORE-SURVEY {
-        integer id PK
+        text id PK
         text user_id FK
+        text name
+        integer created_at_utc
     }
 
     NET-PROMOTER-SCORE-ANSWER {
-        integer id PK
+        text id PK
         integer survey_id FK
+        integer created_at_utc
         integer answer_1
         text answer_2
     }
 
-    SESSION {
-        text id PK
+    GOOGLE-ACCOUNT-CONNECTIONS {
+        text google_user_id
         text user_id FK
-        date expires_at
-    }
-
-    SIGN-IN-ATTEMPT {
-        text id PK
-        text user_id PK
-        date expires_at
     }
 
 
