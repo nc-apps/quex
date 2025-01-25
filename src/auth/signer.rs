@@ -4,11 +4,11 @@ use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 
 #[derive(Serialize, Deserialize, Debug)]
-pub(crate) struct AntiforgeryToken(String);
+pub(crate) struct AntiForgeryToken(String);
 
 #[derive(thiserror::Error, Debug)]
-#[error("Error creating antiforgery token")]
-pub(super) struct CreateAntiforgeryTokenError(#[from] getrandom::Error);
+#[error("Error creating anti forgery token")]
+pub(super) struct CreateAntiForgeryTokenError(#[from] getrandom::Error);
 
 const TOKEN_LENGTH: usize = 62;
 
@@ -41,19 +41,19 @@ impl Signer {
 }
 
 #[derive(Clone)]
-pub(crate) struct AntifForgeryTokenProvider {
+pub(crate) struct AntiForgeryTokenProvider {
     signer: Signer,
 }
 
 const SIGNATURE_LENGTH: usize = 32;
-impl AntifForgeryTokenProvider {
+impl AntiForgeryTokenProvider {
     pub(crate) fn new(signer: Signer) -> Self {
         Self { signer }
     }
 
-    pub(super) fn create_antiforgery_token(
+    pub(super) fn create_anti_forgery_token(
         &self,
-    ) -> Result<AntiforgeryToken, CreateAntiforgeryTokenError> {
+    ) -> Result<AntiForgeryToken, CreateAntiForgeryTokenError> {
         let mut token = [0; TOKEN_LENGTH];
 
         let mut unique = &mut token[SIGNATURE_LENGTH..];
@@ -62,10 +62,10 @@ impl AntifForgeryTokenProvider {
 
         token[..SIGNATURE_LENGTH].copy_from_slice(signature.as_ref());
 
-        Ok(AntiforgeryToken(BASE64_URL_SAFE_NO_PAD.encode(&token)))
+        Ok(AntiForgeryToken(BASE64_URL_SAFE_NO_PAD.encode(&token)))
     }
 
-    pub(super) fn is_token_valid(&self, AntiforgeryToken(token): &AntiforgeryToken) -> bool {
+    pub(super) fn is_token_valid(&self, AntiForgeryToken(token): &AntiForgeryToken) -> bool {
         let mut token_bytes = [0; TOKEN_LENGTH];
         let bytes_written = BASE64_URL_SAFE_NO_PAD.decode_slice(token, &mut token_bytes);
         if !matches!(bytes_written, Ok(TOKEN_LENGTH)) {

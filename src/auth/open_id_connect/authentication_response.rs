@@ -15,7 +15,7 @@ use crate::auth::open_id_connect::{ensure_https, validate_id_token};
 use crate::auth::token::complete_signin::{CompleteSignInToken, EncodeTokenError};
 use crate::auth::{cookie, create_redirect_url};
 use crate::{
-    auth::{AntiforgeryToken, BadServerUrl},
+    auth::{AntiForgeryToken, BadServerUrl},
     AppState,
 };
 
@@ -59,7 +59,7 @@ enum AuthenticationResult {
 
 #[derive(Deserialize, Debug)]
 pub(in crate::auth) struct AuthenticationResponse {
-    state: AntiforgeryToken,
+    state: AntiForgeryToken,
     #[serde(flatten)]
     result: AuthenticationResult,
 }
