@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::{env, net::Ipv4Addr, time::Duration};
+use std::{env, net::Ipv4Addr};
 
 use crate::routes::survey;
 use auth::cookie::{self};
@@ -10,7 +10,7 @@ use axum::{http::Uri, routing::get, Router};
 use base64::prelude::BASE64_URL_SAFE_NO_PAD;
 use base64::Engine;
 use dotenvy::dotenv;
-use libsql::{named_params, Connection};
+use libsql::Connection;
 use tokio::signal;
 use tower_http::services::ServeDir;
 use tracing_subscriber::layer::SubscriberExt;

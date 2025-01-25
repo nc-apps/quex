@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use libsql::{Builder, Connection, Database};
 
 // Use local database for debugging
