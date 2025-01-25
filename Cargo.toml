@@ -2,6 +2,7 @@
 name = "quex"
 version = "0.1.0"
 edition = "2021"
+default-run = "quex"
 
 [dependencies]
 # For HTML templating
@@ -57,3 +58,7 @@ jsonwebtoken = "9.3.0"
 postcard = { version = "1.1.1", default-features = false, features = ["alloc"] }
 # Helpful for baking cookies
 cookie = "0.18.1"
+# For managing secrets with Bitwarden
+bitwarden = "1.0.0"
+# Required to use Bitwarden
+uuid = "1.12.1"

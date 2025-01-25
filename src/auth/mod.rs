@@ -18,7 +18,7 @@ use libsql::named_params;
 use nanoid::nanoid;
 use open_id_connect::{authentication_response, get_sign_in_with_google_url};
 use serde::{Deserialize, Serialize};
-use signer::{AntiforgeryToken, Signer};
+use signer::{AntiForgeryToken, Signer};
 use time::{Duration, OffsetDateTime};
 use token::complete_signin::{CompleteSignInToken, DecodeTokenError, EncodeTokenError};
 use url::Url;
@@ -108,7 +108,7 @@ struct AuthenticationRequest<'a, const SCOPES_LENGTH: usize> {
     #[serde(rename = "scope")]
     scopes: Scopes<'a, SCOPES_LENGTH>,
     redirect_uri: Url,
-    state: AntiforgeryToken,
+    state: AntiForgeryToken,
     nonce: Nonce,
     prompt: Option<Prompt>,
     include_granted_scopes: Option<bool>,

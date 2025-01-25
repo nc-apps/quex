@@ -1,27 +1,25 @@
 use libsql::{Builder, Connection, Database};
 
 // Use local database for debugging
-#[cfg(debug_assertions)]
-async fn create_database() -> Database {
-    Builder::new_local("database.db").build().await.unwrap()
-}
+// #[cfg(debug_assertions)]
+// async fn create_database(_turso_database_url: Arc<str>, _turso_auth_token: Arc<str>) -> Database {
+//     Builder::new_local("database.db").build().await.unwrap()
+// }
 
-#[cfg(not(debug_assertions))]
-async fn create_database() -> Database {
-    use std::env;
-    let url = env::var("TURSO_DATABASE_URL")
-        .expect("TURSO_DATABASE_URL environment variable must be set. Did you forget to set up the .env file?");
-    let token = env::var("TURSO_AUTH_TOKEN").unwrap_or_default();
-
-    Builder::new_remote(url, token)
+// #[cfg(not(debug_assertions))]
+async fn create_database(turso_database_url: String, turso_auth_token: String) -> Database {
+    Builder::new_remote(turso_database_url, turso_auth_token)
         .build()
         .await
         .expect("Failed to connect to database")
 }
 
 /// Creates the database and initializes it with the tables
-pub(super) async fn initialize_database() -> Connection {
-    let database = create_database().await;
+pub(super) async fn initialize_database(
+    turso_database_url: String,
+    turso_auth_token: String,
+) -> Connection {
+    let database = create_database(turso_database_url, turso_auth_token).await;
 
     let connection = database.connect().unwrap();
 

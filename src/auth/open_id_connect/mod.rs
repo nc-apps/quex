@@ -6,7 +6,7 @@ use time::OffsetDateTime;
 use url::Url;
 
 use super::{
-    create_redirect_url, signer::CreateAntiforgeryTokenError, AppState, AuthenticationRequest,
+    create_redirect_url, signer::CreateAntiForgeryTokenError, AppState, AuthenticationRequest,
     BadServerUrl, Nonce, ResponseType, Scopes,
 };
 
@@ -117,7 +117,7 @@ pub(in crate::auth) enum SignInWithGoogleError {
     QueryError(#[from] serde_urlencoded::ser::Error),
 
     #[error("Failed creating anti-forgery token")]
-    CreateAntiforgeryTokenError(#[from] CreateAntiforgeryTokenError),
+    CreateAntiforgeryTokenError(#[from] CreateAntiForgeryTokenError),
 }
 
 pub(in crate::auth) async fn get_sign_in_with_google_url<const SCOPES_LENGTH: usize>(
@@ -149,7 +149,7 @@ pub(in crate::auth) async fn get_sign_in_with_google_url<const SCOPES_LENGTH: us
     // Create anti-forgery token
     let antiforgery_token = state
         .anti_forgery_token_provider
-        .create_antiforgery_token()?;
+        .create_anti_forgery_token()?;
 
     let request = AuthenticationRequest {
         client_id: client_id.as_ref(),

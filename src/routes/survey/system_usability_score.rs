@@ -10,7 +10,6 @@ use libsql::named_params;
 use nanoid::nanoid;
 use reqwest::StatusCode;
 use serde::Deserialize;
-use std::ops::Mul;
 use std::sync::Arc;
 use time::OffsetDateTime;
 

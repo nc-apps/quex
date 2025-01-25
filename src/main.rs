@@ -1,16 +1,16 @@
 use std::sync::Arc;
-use std::{env, net::Ipv4Addr, time::Duration};
+use std::{env, net::Ipv4Addr};
 
 use crate::routes::survey;
 use auth::cookie::{self};
 use auth::open_id_connect::discovery;
-use auth::signer::{AntifForgeryTokenProvider, Signer};
+use auth::signer::{AntiForgeryTokenProvider, Signer};
 use axum::http::uri::InvalidUri;
 use axum::{http::Uri, routing::get, Router};
 use base64::prelude::BASE64_URL_SAFE_NO_PAD;
 use base64::Engine;
 use dotenvy::dotenv;
-use libsql::{named_params, Connection};
+use libsql::Connection;
 use tokio::signal;
 use tower_http::services::ServeDir;
 use tracing_subscriber::layer::SubscriberExt;
@@ -19,6 +19,7 @@ use tracing_subscriber::util::SubscriberInitExt;
 mod auth;
 mod database;
 mod routes;
+mod secret;
 
 #[derive(thiserror::Error, Debug)]
 enum SigningSecretError {
@@ -30,10 +31,9 @@ enum SigningSecretError {
     LengthError { expected_length: usize },
 }
 
-fn read_signing_secret(variable_name: &str) -> Result<Signer, SigningSecretError> {
-    let secret = env::var(variable_name).map_err(SigningSecretError::ReadError)?;
+fn transform_signing_secret(signing_secret: Arc<str>) -> Result<Signer, SigningSecretError> {
     let secret: [u8; 32] = BASE64_URL_SAFE_NO_PAD
-        .decode(secret)
+        .decode(signing_secret.as_ref())
         .map_err(SigningSecretError::DecodeError)?
         .try_into()
         .map_err(|_| SigningSecretError::LengthError {
@@ -43,10 +43,11 @@ fn read_signing_secret(variable_name: &str) -> Result<Signer, SigningSecretError
     Ok(Signer::new(secret))
 }
 
-fn read_cookie_signing_key() -> Result<cookie::Key, SigningSecretError> {
-    let secret = env::var("COOKIE_SIGNING_SECRET").map_err(SigningSecretError::ReadError)?;
+fn transform_cookie_signing_key(
+    signing_secret: Arc<str>,
+) -> Result<cookie::Key, SigningSecretError> {
     let secret: [u8; 64] = BASE64_URL_SAFE_NO_PAD
-        .decode(secret)
+        .decode(signing_secret.as_ref())
         .map_err(SigningSecretError::DecodeError)?
         .try_into()
         .map_err(|_| SigningSecretError::LengthError {
@@ -68,6 +69,8 @@ enum AppError {
     ReadClientIdError(env::VarError),
     #[error("Error reading google client secret")]
     ReadClientSecretError(env::VarError),
+    #[error("Error reading Turso database url")]
+    ReadDatabaseUrlError(env::VarError),
 
     #[error("Either google client id or secret is missing")]
     MissingClientIdOrSecret,
@@ -80,6 +83,9 @@ enum AppError {
     CookieSigningSecretError(SigningSecretError),
     #[error("Error creating cookie key")]
     CreateCookieKeyError,
+
+    #[error("Error setting up secrets")]
+    SecretError(#[from] secret::Error),
 }
 
 #[tokio::main]
@@ -93,9 +99,13 @@ async fn main() -> Result<(), AppError> {
         .init();
 
     dotenv().ok();
+    // Secrets
+    let secrets = secret::setup().await?;
+
+    let url = std::env::var("TURSO_DATABASE_URL").map_err(AppError::ReadDatabaseUrlError)?;
 
     // Set up database
-    let connection = database::initialize_database().await;
+    let connection = database::initialize_database(url, secrets.lib_sql_auth_token).await;
 
     // Configuration
     //TODO implement fallback to localhost
@@ -111,37 +121,26 @@ async fn main() -> Result<(), AppError> {
         Err(error) => return Err(AppError::ReadClientIdError(error)),
     };
 
-    let client_secret: Option<Arc<str>> = match env::var("GOOGLE_CLIENT_SECRET") {
-        Ok(client_secret) => Some(client_secret.into()),
-        Err(env::VarError::NotPresent) => None,
-        Err(error) => return Err(AppError::ReadClientSecretError(error)),
-    };
-
     // Either need to have both or none
-    let client_credentials = match (client_id, client_secret) {
-        (Some(client_id), Some(client_secret)) => Some(ClientCredentials {
-            id: client_id,
-            secret: client_secret,
-        }),
-        (None, None) => None,
-        _ => {
-            return Err(AppError::MissingClientIdOrSecret);
-        }
-    };
+    let client_credentials = client_id.map(|id| ClientCredentials {
+        id,
+        secret: secrets.google_client_secret,
+    });
 
     let configuration = Configuration {
         server_url: url,
         client_credentials,
     };
 
-    let signer = read_signing_secret("ANTI_FORGERY_SIGNING_SECRET")
+    let signer = transform_signing_secret(secrets.anti_forgery_token_signing_key)
         .map_err(AppError::AntiForgerySecretError)?;
-    let anti_forgery_token_provider = AntifForgeryTokenProvider::new(signer);
+    let anti_forgery_token_provider = AntiForgeryTokenProvider::new(signer);
 
-    let google_id_signer = read_signing_secret("GOOGLE_ID_SIGNING_SECRET")
+    let google_id_signer = transform_signing_secret(secrets.google_id_signing_key)
         .map_err(AppError::GoogleUserIdSigningSecretError)?;
 
-    let cookie_key = read_cookie_signing_key().map_err(AppError::CookieSigningSecretError)?;
+    let cookie_key = transform_cookie_signing_key(secrets.cookie_signing_secret)
+        .map_err(AppError::CookieSigningSecretError)?;
 
     let client = reqwest::Client::new();
     let app_state = AppState {
@@ -200,7 +199,7 @@ pub(crate) struct AppState {
     connection: Connection,
     client: reqwest::Client,
     configuration: Configuration,
-    anti_forgery_token_provider: AntifForgeryTokenProvider,
+    anti_forgery_token_provider: AntiForgeryTokenProvider,
     discovery_cache: discovery::DocumentCache,
     google_id_signer: Signer,
     pub(crate) cookie_key: cookie::Key,
