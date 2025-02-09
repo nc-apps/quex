@@ -112,8 +112,7 @@ async fn main() -> Result<(), AppError> {
     //TODO implement warning that users can not follow links if host is localhost or 127.0.0.1
     let url = env::var("QUEX_URL").map_err(AppError::NoUrlConfigured)?;
 
-    let url = Uri::try_from(url)?;
-    let port = url.port().map(|port| port.as_u16()).unwrap_or(3_000);
+    let url: Uri = Uri::try_from(url)?;
 
     let client_id: Option<Arc<str>> = match env::var("GOOGLE_CLIENT_ID") {
         Ok(client_id) => Some(client_id.into()),
@@ -165,8 +164,14 @@ async fn main() -> Result<(), AppError> {
         .fallback_service(ServeDir::new("public"))
         .with_state(app_state);
 
+    let address = if cfg!(debug_assertions) {
+        Ipv4Addr::new(127, 0, 0, 1)
+    } else {
+        Ipv4Addr::new(0, 0, 0, 0)
+    };
+
     // Run the server
-    let listener = tokio::net::TcpListener::bind((Ipv4Addr::new(127, 0, 0, 1), port))
+    let listener = tokio::net::TcpListener::bind((address, 3000))
         .await
         .unwrap();
 
