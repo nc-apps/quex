@@ -29,9 +29,7 @@ RUN corepack enable
 COPY ./pnpm-lock.yaml ./pnpm-lock.yaml
 RUN pnpm fetch
 
-COPY ./package.json ./package.json
-COPY ./templates ./templates
-COPY ./tailwind.css ./tailwind.css
+COPY . .
 
 RUN pnpm install --offline --frozen-lockfile
 
