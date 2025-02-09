@@ -32,6 +32,14 @@ RUN cargo build --release
 # The final image can be specified with the target when building the docker image
 # Final base image
 FROM debian:bookworm-slim AS final
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    # OpenSSL dependency for reqwest used by bitwarden
+    libssl-dev \
+    # Certificates needed to make HTTPS requests
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
 # Copy the build artifacts from the build stage
 COPY --from=build ./quex/target/release/quex .
 
