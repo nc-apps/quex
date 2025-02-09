@@ -5,7 +5,8 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "tailwindcss": "tailwindcss -i ./tailwind.css -o ./public/styles.css"
+    "tailwindcss": "tailwindcss -i ./tailwind.css -o ./public/styles.css",
+    "build": "tailwindcss -i ./tailwind.css -o ./public/styles.css --minify"
   },
   "keywords": [],
   "license": "Apache-2.0",
