@@ -113,7 +113,7 @@ async fn main() -> Result<(), AppError> {
     let url = env::var("QUEX_URL").map_err(AppError::NoUrlConfigured)?;
 
     let url = Uri::try_from(url)?;
-    let port = url.port().map(|port| port.as_u16()).unwrap_or(80);
+    let port = url.port().map(|port| port.as_u16()).unwrap_or(3_000);
 
     let client_id: Option<Arc<str>> = match env::var("GOOGLE_CLIENT_ID") {
         Ok(client_id) => Some(client_id.into()),
