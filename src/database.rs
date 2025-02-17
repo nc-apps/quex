@@ -18,7 +18,7 @@ async fn create_database(turso_database_url: String, turso_auth_token: String) -
 pub(super) async fn initialize_database(
     turso_database_url: String,
     turso_auth_token: String,
-) -> Connection {
+) -> Database {
     let database = create_database(turso_database_url, turso_auth_token).await;
 
     let connection = database.connect().unwrap();
@@ -31,5 +31,5 @@ pub(super) async fn initialize_database(
 
     tracing::debug!("Tables created");
 
-    connection
+    database
 }

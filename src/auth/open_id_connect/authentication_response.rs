@@ -88,8 +88,10 @@ pub(in crate::auth) enum HandleAuthenticationResponseError {
     VerifyIdTokenError(#[from] ValidateIdTokenError),
     #[error("Error creating complete sign in token: {0}")]
     EncodeTokenError(#[from] EncodeTokenError),
+    #[error("Error connecting to database: {0}")]
+    DatabaseConnectionError(libsql::Error),
     #[error("Error checking for existing user: {0}")]
-    GetUserError(#[from] libsql::Error),
+    GetUserError(libsql::Error),
     #[error("Error creating cookie: {0}")]
     CreateCookieError(#[from] postcard::Error),
     #[error("Error creating complete signup redirect url: {0}")]
@@ -199,16 +201,28 @@ pub(in crate::auth) async fn handle(
         validate_id_token(&response.id_token, &state.client, keys_url, &credentials.id).await?;
 
     // Check if user already exists
-    let mut rows = state
-        .connection
+    let connection = state
+        .database
+        .connect()
+        .map_err(HandleAuthenticationResponseError::DatabaseConnectionError)?;
+
+    let mut rows = connection
         .query(
             "SELECT user_id FROM google_account_connections WHERE google_user_id = :id",
             named_params![":id": claims.subject],
         )
-        .await?;
+        .await
+        .map_err(HandleAuthenticationResponseError::GetUserError)?;
 
-    let row = rows.next().await?;
-    let existing_user_id = row.map(|row| row.get::<String>(0)).transpose()?;
+    let row = rows
+        .next()
+        .await
+        .map_err(HandleAuthenticationResponseError::GetUserError)?;
+
+    let existing_user_id = row
+        .map(|row| row.get::<String>(0))
+        .transpose()
+        .map_err(HandleAuthenticationResponseError::GetUserError)?;
     if let Some(existing_user_id) = existing_user_id {
         let cookie = cookie::create(existing_user_id.into())?;
 
