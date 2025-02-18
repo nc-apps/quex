@@ -206,6 +206,8 @@ struct CompleteSignUpRequest {
 
 #[derive(thiserror::Error, Debug)]
 enum CompleteSignUpError {
+    #[error("Error connecting to database: {0}")]
+    Database(#[from] libsql::Error),
     #[error("Error decoding token: {0}")]
     DecodeError(#[from] DecodeTokenError),
     #[error("Signin token is expired")]
@@ -233,8 +235,8 @@ async fn complete_signup(
     }
 
     let user_id = nanoid!();
-    state
-        .connection
+    let connection = state.database.connect()?;
+    connection
         .execute(
             "INSERT INTO users (id, name) VALUES (:id, :name)",
             named_params![
@@ -245,8 +247,7 @@ async fn complete_signup(
         .await
         .unwrap();
 
-    state
-        .connection
+    connection
         .execute(
             "INSERT INTO google_account_connections (user_id, google_user_id) VALUES (:user_id, :google_user_id)",
             named_params![
@@ -266,7 +267,7 @@ pub(crate) fn create_router() -> Router<AppState> {
     Router::new()
         .route("/signin", get(get_sign_in_page))
         // Sign out has to be post to prevent other sites from signing users out by linking to the sign out link
-        // (See SameSite lax and CRSF)
+        // (See SameSite lax and CSRF)
         .route("/signout", post(sign_out))
         .route("/signup/complete", post(complete_signup))
         .route(

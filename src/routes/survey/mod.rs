@@ -90,8 +90,12 @@ async fn get_surveys_page(
             )
                 WHERE user_id = :user_id";
 
-    let result = app_state
-        .connection
+    let connection = app_state
+        .database
+        .connect()
+        .expect("Error connecting to database");
+
+    let result = connection
         .query(GET_USER_SURVEYS_QUERY, named_params![":user_id": user.id])
         .await;
 
@@ -282,8 +286,12 @@ async fn create_response(
     request: Request,
 ) -> Result<Redirect, Response> {
     // Get survey to check if it even exists
+    let connection = state
+        .database
+        .connect()
+        .expect("Error connecting to database");
     //TODO optimize as get_survey_page and this is a hot path
-    let result = get_survey(&state.connection, &survey_id).await;
+    let result = get_survey(&connection, &survey_id).await;
     let survey = match result {
         Ok(survey) => survey,
         Err(error) => {
@@ -335,7 +343,11 @@ async fn get_survey_page(
 ) -> Result<Response, Redirect> {
     // Get survey to check if it even exists
     //TODO optimize as get_survey_page and this is a hot path
-    let result = get_survey(&state.connection, &survey_id).await;
+    let connection = state
+        .database
+        .connect()
+        .expect("Error connecting to database");
+    let result = get_survey(&connection, &survey_id).await;
     let survey = match result {
         Ok(survey) => survey,
         Err(error) => {

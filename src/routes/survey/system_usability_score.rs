@@ -57,8 +57,11 @@ pub(super) async fn create_response(
     tracing::debug!("Answers for SUS: {:?}", sus_answers);
     let response_id = nanoid!();
     let now = OffsetDateTime::now_utc().unix_timestamp();
-    app_state
-        .connection
+    let connection = app_state
+        .database
+        .connect()
+        .expect("Error connecting to database");
+    connection
         .execute(
             "INSERT INTO system_usability_score_responses (
                 id,
@@ -131,8 +134,12 @@ pub(super) async fn create_new_survey(
     // case something goes wrong
     let now = OffsetDateTime::now_utc().unix_timestamp();
 
-    let result = state
-        .connection
+    let connection = state
+        .database
+        .connect()
+        .expect("Error connecting to database");
+
+    let result = connection
         .execute(
             "INSERT INTO system_usability_score_surveys (\
                 id,\
@@ -198,7 +205,12 @@ pub(super) async fn get_results_page(
     Path(survey_id): Path<String>,
     user: AuthenticatedUser,
 ) -> impl IntoResponse {
-    let result = state.connection.query(
+    let connection = state
+        .database
+        .connect()
+        .expect("Error connecting to database");
+
+    let result = connection.query(
         "SELECT name FROM system_usability_score_surveys WHERE user_id = :user_id AND id = :survey_id",
         named_params![":user_id": user.id, ":survey_id": survey_id.clone()]).await;
 
@@ -239,8 +251,12 @@ pub(super) async fn get_results_page(
     };
 
     // Read results
-    let result = state
-        .connection
+    let connection = state
+        .database
+        .connect()
+        .expect("Error connecting to database");
+
+    let result = connection
         .query(
             "SELECT * FROM system_usability_score_responses WHERE survey_id = :survey_id",
             named_params![":survey_id": survey_id.clone()],
@@ -355,8 +371,12 @@ pub(super) async fn download_results(
     State(state): State<AppState>,
     Path(survey_id): Path<String>,
 ) -> Result<String, StatusCode> {
-    let result = state
-        .connection
+    let connection = state
+        .database
+        .connect()
+        .expect("Error connecting to database");
+
+    let result = connection
         .query(
             "SELECT * FROM system_usability_score_responses WHERE survey_id = :survey_id",
             named_params![":survey_id": survey_id.clone()],

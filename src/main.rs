@@ -10,7 +10,7 @@ use axum::{http::Uri, routing::get, Router};
 use base64::prelude::BASE64_URL_SAFE_NO_PAD;
 use base64::Engine;
 use dotenvy::dotenv;
-use libsql::Connection;
+use libsql::Database;
 use tokio::signal;
 use tower_http::services::ServeDir;
 use tracing_subscriber::layer::SubscriberExt;
@@ -105,7 +105,7 @@ async fn main() -> Result<(), AppError> {
     let url = std::env::var("TURSO_DATABASE_URL").map_err(AppError::ReadDatabaseUrlError)?;
 
     // Set up database
-    let connection = database::initialize_database(url, secrets.lib_sql_auth_token).await;
+    let database = database::initialize_database(url, secrets.lib_sql_auth_token).await;
 
     // Configuration
     //TODO implement fallback to localhost
@@ -143,7 +143,7 @@ async fn main() -> Result<(), AppError> {
 
     let client = reqwest::Client::new();
     let app_state = AppState {
-        connection,
+        database: database.into(),
         configuration,
         anti_forgery_token_provider,
         discovery_cache: discovery::DocumentCache::new(client.clone()),
@@ -195,13 +195,13 @@ pub(crate) struct Configuration {
     /// The server URL under which the server can be reached publicly for clients.
     /// Used by various systems that need to provide an url to users.
     server_url: Uri,
-    /// Google Auth Platform Client id and secret for OpenID Connect authenticaton flow
+    /// Google Auth Platform Client id and secret for OpenID Connect authentication flow
     client_credentials: Option<ClientCredentials>,
 }
 
 #[derive(Clone)]
 pub(crate) struct AppState {
-    connection: Connection,
+    database: Arc<Database>,
     client: reqwest::Client,
     configuration: Configuration,
     anti_forgery_token_provider: AntiForgeryTokenProvider,
