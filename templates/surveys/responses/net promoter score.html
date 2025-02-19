@@ -1,47 +1,40 @@
-{% extends "layouts/authenticated.html" %}
-
-{% block title %}Index{% endblock %}
-
+{% extends "layouts/base.html" %}
+{% block title %}Quex{% endblock %}
 {% block content %}
-<form action="/q/{{ id }}" method="post"  class="max-w-3xl px-4 py-4 mx-auto sm:px-6 lg:px-8">
-    <fieldset>
-        <legend>How likely are you to recommend us on a scale from 0 to 10?</legend>
 
-        <input type="radio" id="A1" name="Q1" value="1" required/>
-        <label for="A1">1</label>
+<form action="/q/{{ id }}" method="post" class="max-w-3xl px-4 py-4 mx-auto sm:px-6 lg:px-8">
+    <fieldset class="mb-6">
+        <legend class="mb-3 font-medium text-gray-900 text-sm/6">How likely are you to recommend us on a scale from 0 to
+            10?</legend>
 
-        <input type="radio" id="A2" name="Q1" value="2" required/>
-        <label for="A2">2</label>
+        <div class="grid grid-cols-10 grid-rows-1">
+            {% for index in 1..=10 %}
+            <label class="block">
+                <input type="radio" id="A{{ index }}" name="Q1" value="{{ index }}" required
+                    class="block w-4 h-4 p-2 mx-auto text-blue-600 border-gray-300 focus:ring-blue-600">
+                <span class="block text-sm font-medium leading-6 text-center text-gray-900">
+                    {{ index }}
+                </span>
+            </label>
+            {% endfor %}
+        </div>
 
-        <input type="radio" id="A3" name="Q1" value="3" required/>
-        <label for="A3">3</label>
-
-        <input type="radio" id="A4" name="Q1" value="4" required/>
-        <label for="A4">4</label>
-
-        <input type="radio" id="A5" name="Q1" value="5" required/>
-        <label for="A5">5</label>
-
-        <input type="radio" id="A6" name="Q1" value="6" required/>
-        <label for="A6">6</label>
-
-        <input type="radio" id="A7" name="Q1" value="7" required/>
-        <label for="A7">7</label>
-
-        <input type="radio" id="A8" name="Q1" value="8" required/>
-        <label for="A8">8</label>
-
-        <input type="radio" id="A9" name="Q1" value="9" required/>
-        <label for="A9">9</label>
-
-        <input type="radio" id="A10" name="Q1" value="10" required/>
-        <label for="A10">10</label>
     </fieldset>
-    <fieldset>
-        <legend>And why? (optional)</legend>
-        <textarea name="Q2" id="A22"></textarea>
-    </fieldset>
-    <button type="submit">Submit</button>
+    <div>
+        <label for="comment" class="block font-medium text-gray-900 text-sm/6">
+            And why? (optional)
+        </label>
+        <div class="mt-2">
+            <textarea rows="4" name="comment" id="comment"
+                class="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline focus:outline-2 focus:-outline-offset-2 focus:outline-blue-600 sm:text-sm/6"></textarea>
+        </div>
+    </div>
+
+
+    <div class="flex items-center justify-end mt-6 gap-x-6">
+        <button type="submit"
+            class="px-3 py-2 text-sm font-semibold text-white bg-blue-600 rounded-md shadow-sm hover:bg-blue-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">Submit</button>
+    </div>
 </form>
 {% call super() %}
 {% endblock %}

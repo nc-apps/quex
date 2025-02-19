@@ -7,8 +7,8 @@
     <div class="grid grid-cols-[repeat(9,auto)] pb-12 border-b gap-y-3 gap-x-7 border-gray-900/10">
 
         {% for question in questions %}
-        <span class="col-span-4 col-start-1 mt-5">{{ question.0 }}</span>
-        <span class="col-span-4 col-start-6 mt-5 text-end">{{ question.1 }}</span>
+        <span class="col-span-4 col-start-1 mt-5 text-gray-900 text-sm/6">{{ question.0 }}</span>
+        <span class="col-span-4 col-start-6 mt-5 text-gray-900 text-end text-sm/6">{{ question.1 }}</span>
         {% let question_index = loop.index %}
         {# Why does fieldset instead of div not work? #}
         <div class="grid grid-cols-7 col-span-9 col-start-1">

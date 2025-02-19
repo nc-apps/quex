@@ -116,7 +116,11 @@
                                 </td>
                                 <td
                                     class="relative py-4 pl-3 pr-4 text-sm font-medium text-left whitespace-nowrap sm:pr-0">
-                                    {{ answer.1 }}
+                                    {% if let Some(comment) = answer.1 %}
+                                    {{ comment }}
+                                    {% else %}
+                                    <span class="text-gray-400">(No response)</span>
+                                    {% endif %}
                                 </td>
                             </tr>
                             {% endfor %}
