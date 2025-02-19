@@ -48,7 +48,7 @@ pub(super) async fn create_response(
 
     connection
         .execute(
-            "INSERT INTO net_promoter_score_responses (id, created_at_utc, survey_id, answer_1, answer_2) VALUES (:id, :survey_id, :created_at_utc, :answer_1, :answer_2)",
+            "INSERT INTO net_promoter_score_responses (id, survey_id, created_at_utc , answer_1, answer_2) VALUES (:id, :survey_id, :created_at_utc, :answer_1, :answer_2)",
             libsql::named_params! {
                 ":id": response_id,
                 ":survey_id": survey_id,
