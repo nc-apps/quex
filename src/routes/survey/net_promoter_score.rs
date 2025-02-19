@@ -129,7 +129,7 @@ pub(super) async fn create_new_survey(
 struct NetPromoterScoreResultsTemplate {
     id: String,
     name: String,
-    answers: Vec<(i32, String)>,
+    answers: Vec<(i32, Option<String>)>,
     survey_url: String,
 }
 
@@ -208,7 +208,7 @@ pub(super) async fn get_results_page(
         }
     };
 
-    let mut answers: Vec<(i32, String)> = Vec::new();
+    let mut answers: Vec<(i32, Option<String>)> = Vec::new();
 
     loop {
         let result = rows.next().await;
@@ -218,17 +218,23 @@ pub(super) async fn get_results_page(
                 let answer_1 = match answer_1 {
                     Ok(answer_1) => answer_1,
                     Err(error) => {
-                        tracing::error!("Error reading survey id: {:?}", error);
+                        tracing::error!(
+                            "Error reading net promoter score response value answer 1: {:?}",
+                            error
+                        );
                         //TODO display user error message it's not their fault
                         return Redirect::to("/surveys").into_response();
                     }
                 };
 
-                let answer_2 = row.get::<String>(4);
+                let answer_2 = row.get::<Option<String>>(4);
                 let answer_2 = match answer_2 {
                     Ok(answer_2) => answer_2,
                     Err(error) => {
-                        tracing::error!("Error reading survey id: {:?}", error);
+                        tracing::error!(
+                            "Error reading optional net promoter score response comment: {:?}",
+                            error
+                        );
                         //TODO display user error message it's not their fault
                         return Redirect::to("/surveys").into_response();
                     }
@@ -288,7 +294,7 @@ pub(super) async fn download_results(
             Ok(Some(row)) => {
                 let result = row.get::<i32>(2);
 
-                let value1 = match result {
+                let value_1 = match result {
                     Ok(value) => value.to_string(),
                     Err(error) => {
                         tracing::error!("Error reading value at index 2: {:?}", error);
@@ -296,9 +302,9 @@ pub(super) async fn download_results(
                     }
                 };
 
-                let result = row.get::<String>(3);
+                let result = row.get::<Option<String>>(3);
 
-                let value2 = match result {
+                let value_2 = match result {
                     Ok(value) => value,
                     Err(error) => {
                         tracing::error!("Error reading value at index 3: {:?}", error);
@@ -307,7 +313,12 @@ pub(super) async fn download_results(
                 };
 
                 // Füge alle Werte der Zeile als CSV hinzu
-                csv += &format!("{}, {}\n", value1, value2);
+
+                csv += &if let Some(value_2) = value_2 {
+                    format!("{}, {}\n", value_1, value_2)
+                } else {
+                    format!("{}, No response\n", value_1)
+                };
             }
             Err(error) => {
                 tracing::error!("Error reading query result: {:?}", error);
