@@ -71,6 +71,8 @@ enum AppError {
     ReadClientSecretError(env::VarError),
     #[error("Error reading Turso database url")]
     ReadDatabaseUrlError(env::VarError),
+    #[error("Error initializing database: {0}")]
+    DatabaseInitializationError(#[from] database::InitializationError),
 
     #[error("Either google client id or secret is missing")]
     MissingClientIdOrSecret,
@@ -86,6 +88,11 @@ enum AppError {
 
     #[error("Error setting up secrets")]
     SecretError(#[from] secret::Error),
+
+    #[error("Error binding port: {0}")]
+    BindError(std::io::Error),
+    #[error("Error serving app: {0}")]
+    ServeError(std::io::Error),
 }
 
 #[tokio::main]
@@ -105,7 +112,7 @@ async fn main() -> Result<(), AppError> {
     let url = std::env::var("TURSO_DATABASE_URL").map_err(AppError::ReadDatabaseUrlError)?;
 
     // Set up database
-    let database = database::initialize_database(url, secrets.lib_sql_auth_token).await;
+    let database = database::initialize(url, secrets.lib_sql_auth_token).await?;
 
     // Configuration
     //TODO implement fallback to localhost
@@ -173,15 +180,15 @@ async fn main() -> Result<(), AppError> {
     // Run the server
     let listener = tokio::net::TcpListener::bind((address, 3000))
         .await
-        .unwrap();
+        .map_err(AppError::BindError)?;
 
-    tracing::debug!("listening on http://{}", listener.local_addr().unwrap());
+    if let Ok(address) = listener.local_addr() {
+        tracing::debug!("listening on http://{}", address);
+    }
     axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal())
         .await
-        .unwrap();
-
-    Ok(())
+        .map_err(AppError::ServeError)
 }
 
 #[derive(Clone)]

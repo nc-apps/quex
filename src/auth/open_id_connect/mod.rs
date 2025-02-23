@@ -117,7 +117,10 @@ pub(in crate::auth) enum SignInWithGoogleError {
     QueryError(#[from] serde_urlencoded::ser::Error),
 
     #[error("Failed creating anti-forgery token")]
-    CreateAntiforgeryTokenError(#[from] CreateAntiForgeryTokenError),
+    CreateAntiForgeryTokenError(#[from] CreateAntiForgeryTokenError),
+
+    #[error("Error creating nonce: {0}")]
+    CreateNonceError(#[from] getrandom::Error),
 }
 
 pub(in crate::auth) async fn get_sign_in_with_google_url<const SCOPES_LENGTH: usize>(
@@ -147,17 +150,17 @@ pub(in crate::auth) async fn get_sign_in_with_google_url<const SCOPES_LENGTH: us
     let redirect_url = create_redirect_url(state.configuration.server_url.clone())?;
 
     // Create anti-forgery token
-    let antiforgery_token = state
+    let anti_forgery_token = state
         .anti_forgery_token_provider
         .create_anti_forgery_token()?;
 
     let request = AuthenticationRequest {
         client_id: client_id.as_ref(),
-        nonce: Nonce::new(),
+        nonce: Nonce::new()?,
         redirect_uri: redirect_url,
         response_type: ResponseType::Code,
         scopes,
-        state: antiforgery_token,
+        state: anti_forgery_token,
         include_granted_scopes: None,
         prompt: None,
     };

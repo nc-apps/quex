@@ -79,12 +79,12 @@ impl<const N: usize> Serialize for Scopes<'_, N> {
 #[derive(Serialize, Debug)]
 struct Nonce(String);
 impl Nonce {
-    fn new() -> Self {
+    fn new() -> Result<Self, getrandom::Error> {
         // Length is arbitrary there seems to be no requirement
         let mut nonce = [0; 30];
-        getrandom(&mut nonce).unwrap();
+        getrandom(&mut nonce)?;
         let nonce = BASE64_URL_SAFE_NO_PAD.encode(&nonce);
-        Self(nonce)
+        Ok(Self(nonce))
     }
 }
 
