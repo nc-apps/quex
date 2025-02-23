@@ -9,8 +9,8 @@ use axum::http::uri::InvalidUri;
 use axum::{http::Uri, routing::get, Router};
 use base64::prelude::BASE64_URL_SAFE_NO_PAD;
 use base64::Engine;
+use database::Database;
 use dotenvy::dotenv;
-use libsql::Database;
 use tokio::signal;
 use tower_http::services::ServeDir;
 use tracing_subscriber::layer::SubscriberExt;
@@ -112,7 +112,7 @@ async fn main() -> Result<(), AppError> {
     let url = std::env::var("TURSO_DATABASE_URL").map_err(AppError::ReadDatabaseUrlError)?;
 
     // Set up database
-    let database = database::initialize(url, secrets.lib_sql_auth_token).await?;
+    let database = Database::initialize(url, secrets.lib_sql_auth_token).await?;
 
     // Configuration
     //TODO implement fallback to localhost

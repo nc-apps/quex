@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use crate::database::QueryError;
 use crate::AppState;
 use askama_axum::{IntoResponse, Template};
 use authenticated_user::AuthenticatedUser;
@@ -212,6 +213,10 @@ enum CompleteSignUpError {
     DecodeError(#[from] DecodeTokenError),
     #[error("Signin token is expired")]
     Expired,
+    #[error("Error inserting user: {0}")]
+    InsertUserError(QueryError),
+    #[error("Error inserting google account connection: {0}")]
+    InsertGoogleAccountConnectionError(QueryError),
     #[error("Error creating cookie: {0}")]
     CreateCookieError(#[from] postcard::Error),
 }
@@ -235,28 +240,17 @@ async fn complete_signup(
     }
 
     let user_id = nanoid!();
-    let connection = state.database.connect()?;
-    connection
-        .execute(
-            "INSERT INTO users (id, name) VALUES (:id, :name)",
-            named_params![
-                ":id": user_id.clone(),
-                ":name": request.name,
-            ],
-        )
+    state
+        .database
+        .insert_user(&user_id, &request.name)
         .await
-        .unwrap();
+        .map_err(CompleteSignUpError::InsertUserError)?;
 
-    connection
-        .execute(
-            "INSERT INTO google_account_connections (user_id, google_user_id) VALUES (:user_id, :google_user_id)",
-            named_params![
-                ":user_id": user_id.clone(),
-                ":google_user_id": token.user_id,
-            ],
-        )
+    state
+        .database
+        .insert_google_account_connection(&user_id, &token.user_id)
         .await
-        .unwrap();
+        .map_err(CompleteSignUpError::InsertGoogleAccountConnectionError)?;
 
     let cookie = cookie::create(user_id.into())?;
 
