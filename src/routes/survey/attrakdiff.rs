@@ -1,14 +1,14 @@
 use crate::auth::authenticated_user::AuthenticatedUser;
+use crate::database::{MultiRowQueryError, SingleRowQueryError};
 use crate::routes::create_share_link;
 use crate::routes::survey::get_file_name;
 use crate::AppState;
 use askama::Template;
 use askama_axum::IntoResponse;
 use axum::extract::{Path, State};
-use axum::http::HeaderMap;
+use axum::http::{self, HeaderMap};
 use axum::response::Redirect;
 use axum::Form;
-use libsql::named_params;
 use nanoid::nanoid;
 use reqwest::header::HeaderValue;
 use reqwest::{header, StatusCode};
@@ -20,12 +20,12 @@ use time::OffsetDateTime;
 #[derive(Template)]
 #[template(path = "surveys/responses/attrakdiff.html")]
 struct AttrakDiffTemplate {
-    id: String,
+    id: Arc<str>,
     questions: Vec<(String, String)>,
 }
 
 /// Handler for the AttrakDiff survey page
-pub(super) fn get_page(id: String) -> askama_axum::Response {
+pub(super) fn get_page(id: Arc<str>) -> askama_axum::Response {
     let attrakdiff_template = AttrakDiffTemplate {
         id,
         questions: vec![
@@ -67,184 +67,78 @@ pub(super) fn get_page(id: String) -> askama_axum::Response {
 }
 
 #[derive(Deserialize, Debug)]
-pub(super) struct Response {
+pub(crate) struct Response {
     #[serde(rename = "Q1")]
-    q1: u8,
+    pub(crate) q1: u8,
     #[serde(rename = "Q2")]
-    q2: u8,
+    pub(crate) q2: u8,
     #[serde(rename = "Q3")]
-    q3: u8,
+    pub(crate) q3: u8,
     #[serde(rename = "Q4")]
-    q4: u8,
+    pub(crate) q4: u8,
     #[serde(rename = "Q5")]
-    q5: u8,
+    pub(crate) q5: u8,
     #[serde(rename = "Q6")]
-    q6: u8,
+    pub(crate) q6: u8,
     #[serde(rename = "Q7")]
-    q7: u8,
+    pub(crate) q7: u8,
     #[serde(rename = "Q8")]
-    q8: u8,
+    pub(crate) q8: u8,
     #[serde(rename = "Q9")]
-    q9: u8,
+    pub(crate) q9: u8,
     #[serde(rename = "Q10")]
-    q10: u8,
+    pub(crate) q10: u8,
     #[serde(rename = "Q11")]
-    q11: u8,
+    pub(crate) q11: u8,
     #[serde(rename = "Q12")]
-    q12: u8,
+    pub(crate) q12: u8,
     #[serde(rename = "Q13")]
-    q13: u8,
+    pub(crate) q13: u8,
     #[serde(rename = "Q14")]
-    q14: u8,
+    pub(crate) q14: u8,
     #[serde(rename = "Q15")]
-    q15: u8,
+    pub(crate) q15: u8,
     #[serde(rename = "Q16")]
-    q16: u8,
+    pub(crate) q16: u8,
     #[serde(rename = "Q17")]
-    q17: u8,
+    pub(crate) q17: u8,
     #[serde(rename = "Q18")]
-    q18: u8,
+    pub(crate) q18: u8,
     #[serde(rename = "Q19")]
-    q19: u8,
+    pub(crate) q19: u8,
     #[serde(rename = "Q20")]
-    q20: u8,
+    pub(crate) q20: u8,
     #[serde(rename = "Q21")]
-    q21: u8,
+    pub(crate) q21: u8,
     #[serde(rename = "Q22")]
-    q22: u8,
+    pub(crate) q22: u8,
     #[serde(rename = "Q23")]
-    q23: u8,
+    pub(crate) q23: u8,
     #[serde(rename = "Q24")]
-    q24: u8,
+    pub(crate) q24: u8,
     #[serde(rename = "Q25")]
-    q25: u8,
+    pub(crate) q25: u8,
     #[serde(rename = "Q26")]
-    q26: u8,
+    pub(crate) q26: u8,
     #[serde(rename = "Q27")]
-    q27: u8,
+    pub(crate) q27: u8,
     #[serde(rename = "Q28")]
-    q28: u8,
+    pub(crate) q28: u8,
 }
 
 /// Handler that creates a response from an attrakdiff survey response
 pub(super) async fn create_response(
-    State(app_state): State<AppState>,
-    Form(attrakdiff_answers): Form<Response>,
-    survey_id: String,
+    State(state): State<AppState>,
+    Form(response): Form<Response>,
+    survey_id: Arc<str>,
 ) -> Redirect {
-    tracing::debug!("Answers for AttrakDiff: {:?}", attrakdiff_answers);
     let response_id = nanoid!();
     let now = OffsetDateTime::now_utc().unix_timestamp();
 
-    let connection = app_state
+    state
         .database
-        .connect()
-        .expect("Error connecting to database");
-
-    connection
-        .execute(
-            // insert answers 1 to 28 into database
-            "INSERT INTO attrakdiff_responses (
-                id,
-                survey_id,
-                created_at_utc,
-                answer_1,
-                answer_2,
-                answer_3,
-                answer_4,
-                answer_5,
-                answer_6,
-                answer_7,
-                answer_8,
-                answer_9,
-                answer_10,
-                answer_11,
-                answer_12,
-                answer_13,
-                answer_14,
-                answer_15,
-                answer_16,
-                answer_17,
-                answer_18,
-                answer_19,
-                answer_20,
-                answer_21,
-                answer_22,
-                answer_23,
-                answer_24,
-                answer_25,
-                answer_26,
-                answer_27,
-                answer_28
-            ) VALUES (
-                ?1,
-                ?2,
-                ?3,
-                ?4,
-                ?5,
-                ?6,
-                ?7,
-                ?8,
-                ?9,
-                ?10,
-                ?11,
-                ?12,
-                ?13,
-                ?14,
-                ?15,
-                ?16,
-                ?17,
-                ?18,
-                ?19,
-                ?20,
-                ?21,
-                ?22,
-                ?23,
-                ?24,
-                ?25,
-                ?26,
-                ?27,
-                ?28,
-                ?29,
-                ?30,
-                ?31
-            )",
-            libsql::params![
-                response_id,
-                survey_id,
-                now,
-                attrakdiff_answers.q1,
-                attrakdiff_answers.q2,
-                attrakdiff_answers.q3,
-                attrakdiff_answers.q4,
-                attrakdiff_answers.q5,
-                attrakdiff_answers.q6,
-                attrakdiff_answers.q7,
-                attrakdiff_answers.q8,
-                attrakdiff_answers.q9,
-                attrakdiff_answers.q10,
-                attrakdiff_answers.q11,
-                attrakdiff_answers.q12,
-                attrakdiff_answers.q13,
-                attrakdiff_answers.q14,
-                attrakdiff_answers.q15,
-                attrakdiff_answers.q16,
-                attrakdiff_answers.q17,
-                attrakdiff_answers.q18,
-                attrakdiff_answers.q19,
-                attrakdiff_answers.q20,
-                attrakdiff_answers.q21,
-                attrakdiff_answers.q22,
-                attrakdiff_answers.q23,
-                attrakdiff_answers.q24,
-                attrakdiff_answers.q25,
-                attrakdiff_answers.q26,
-                attrakdiff_answers.q27,
-                attrakdiff_answers.q28,
-            ],
-        )
-        .await
-        .expect("Failed to insert into database");
+        .insert_attrakdiff_response(&survey_id, &response_id, now, response)
+        .await;
 
     tracing::debug!("Inserted into database");
 
@@ -256,7 +150,7 @@ pub(super) async fn create_new_survey(
     State(state): State<AppState>,
     user: AuthenticatedUser,
     name: Option<String>,
-) -> Redirect {
+) -> Result<Redirect, CreateSurveyError> {
     let survey_id = nanoid!();
 
     let name: Arc<str> = match name.as_deref() {
@@ -270,41 +164,13 @@ pub(super) async fn create_new_survey(
     // case something goes wrong
     let now = OffsetDateTime::now_utc().unix_timestamp();
 
-    let connection = state
+    state
         .database
-        .connect()
-        .expect("Error connecting to database");
-    let result = connection
-        .execute(
-            "INSERT INTO attrakdiff_surveys (\
-                id,\
-                user_id,\
-                name,\
-                created_at_utc\
-                ) \
-                VALUES (\
-                    :id,\
-                    :user_id,\
-                    :name,\
-                    :created_at_utc\
-                )",
-            named_params! {
-                ":id":survey_id.clone(),
-                ":user_id":user.id,
-                ":name":name,
-                ":created_at_utc":now
-            },
-        )
+        .insert_attrakdiff_survey(&survey_id, &user.id, &name, now)
         .await;
 
-    if let Err(error) = result {
-        tracing::error!("Error creating new survey: {:?}", error);
-        //TODO: inform user creation has failed and it's not their fault
-        return Redirect::to("/");
-    }
-
     // Redirect to newly created survey overview
-    Redirect::to(format!("/surveys/ad/{}", survey_id).as_ref())
+    Ok(Redirect::to(format!("/surveys/ad/{}", survey_id).as_ref()))
 }
 
 //TODO consider renaming to evaluation or something more fitting
@@ -312,182 +178,107 @@ pub(super) async fn create_new_survey(
 #[derive(Template)]
 #[template(path = "surveys/results/attrakdiff.html")]
 struct AttrakdiffResultsTemplate {
-    id: String,
-    name: String,
-    answers: Vec<[i32; 28]>,
+    id: Arc<str>,
+    name: Arc<str>,
+    responses: Vec<[i32; 28]>,
     /// The url that can be used to share the survey with respondents
     survey_url: String,
+}
+
+#[derive(thiserror::Error, Debug)]
+pub(super) enum GetResultsPageError {
+    #[error("Error getting survey: {0}")]
+    GetSurveyError(SingleRowQueryError),
+    #[error("Error getting survey responses: {0}")]
+    GetSurveyResponsesError(MultiRowQueryError),
+}
+
+impl IntoResponse for GetResultsPageError {
+    fn into_response(self) -> askama_axum::Response {
+        tracing::error!("Error getting results page: {}", self);
+        http::StatusCode::INTERNAL_SERVER_ERROR.into_response()
+    }
 }
 
 /// Gets the details page that displays the results of the survey and gives insights to the responses
 pub(super) async fn get_results_page(
     State(state): State<AppState>,
-    Path(survey_id): Path<String>,
+    Path(survey_id): Path<Arc<str>>,
     user: AuthenticatedUser,
-) -> impl IntoResponse {
-    let connection = state
+) -> Result<impl IntoResponse, GetResultsPageError> {
+    // This also checks if the user has access to the survey
+    let survey_name = state
         .database
-        .connect()
-        .expect("Error connecting to database");
-    let result = connection
-        .query(
-            "SELECT name FROM attrakdiff_surveys WHERE user_id = :user_id AND id = :survey_id",
-            named_params![":user_id": user.id, ":survey_id": survey_id.clone()],
-        )
-        .await;
+        .get_attrakdiff_survey_name(&survey_id, &user.id)
+        .await
+        .map_err(GetResultsPageError::GetSurveyError)?;
 
-    let mut rows = match result {
-        Ok(rows) => rows,
-        Err(error) => {
-            tracing::error!("Error querying for AttrakDiff survey: {:?}", error);
-            //TODO display user error message it's not their fault
-            return Redirect::to("/surveys").into_response();
-        }
+    let Some(survey_name) = survey_name else {
+        return Ok(StatusCode::NOT_FOUND.into_response());
     };
 
-    let result = rows.next().await;
-    //TODO put data we want to display into template
-    let row = match result {
-        Ok(Some(row)) => row,
-        // Survey not found. It wasn't created (yet), or deleted
-        //TODO display user error message
-        Ok(None) => return Redirect::to("/surveys").into_response(),
-        Err(error) => {
-            tracing::error!("Error reading query result: {:?}", error);
-            //TODO display user error message it's not their fault
-            return Redirect::to("/surveys").into_response();
-        }
-    };
-
-    let survey_name_result = row.get::<String>(0);
-    let name = match survey_name_result {
-        Ok(name) => name,
-        Err(error) => {
-            tracing::error!("Error reading survey name: {:?}", error);
-            //TODO display user error message it's not their fault
-            return Redirect::to("/surveys").into_response();
-        }
-    };
-
-    // Read results
-    let connection = state
+    let responses = state
         .database
-        .connect()
-        .expect("Error connecting to database");
-    let result = connection
-        .query(
-            "SELECT * FROM attrakdiff_responses WHERE survey_id = :survey_id",
-            named_params![":survey_id": survey_id.clone()],
-        )
-        .await;
-
-    let mut rows = match result {
-        Ok(rows) => rows,
-        Err(error) => {
-            tracing::error!("Error querying for AttrakDiff responses: {:?}", error);
-            //TODO display user error message it's not their fault
-            return Redirect::to("/surveys").into_response();
-        }
-    };
-
-    let mut answers = Vec::new();
-
-    /// Offset for the fields that contain ids and timestamps
-    const META_DATA_OFFSET: usize = 3;
-    loop {
-        let result = rows.next().await;
-        match result {
-            Ok(Some(row)) => {
-                let mut response = [0; 28];
-                for index in 0usize..28 {
-                    let answer = row.get::<i32>((META_DATA_OFFSET + index).try_into().unwrap());
-                    let answer = match answer {
-                        Ok(answer) => answer,
-                        Err(error) => {
-                            tracing::error!("Error reading answer number {index}: {error:?}");
-                            //TODO display user error message it's not their fault
-                            return Redirect::to("/surveys").into_response();
-                        }
-                    };
-                    response[index] = answer;
-                }
-                answers.push(response);
-            }
-            Ok(None) => break,
-            Err(error) => {
-                tracing::error!("Error reading query result: {:?}", error);
-                //TODO display user error message it's not their fault
-                return Redirect::to("/surveys").into_response();
-            }
-        }
-    }
+        .get_attrakdiff_survey_responses(&survey_id)
+        .await
+        .map_err(GetResultsPageError::GetSurveyResponsesError)?;
 
     let survey_url = create_share_link(&state.configuration.server_url, &survey_id);
-    AttrakdiffResultsTemplate {
+    Ok(AttrakdiffResultsTemplate {
         id: survey_id,
-        name,
-        answers,
+        name: survey_name,
+        responses,
         survey_url,
     }
-    .into_response()
+    .into_response())
+}
+
+#[derive(thiserror::Error, Debug)]
+enum DownloadResultsError {
+    #[error("Error getting survey: {0}")]
+    GetSurveyError(SingleRowQueryError),
+    #[error("Error getting survey responses: {0}")]
+    GetSurveyResponsesError(MultiRowQueryError),
+}
+
+impl IntoResponse for DownloadResultsError {
+    fn into_response(self) -> askama_axum::Response {
+        tracing::error!("Error downloading results: {}", self);
+        http::StatusCode::INTERNAL_SERVER_ERROR.into_response()
+    }
 }
 
 pub(super) async fn download_results(
     State(state): State<AppState>,
     Path(survey_id): Path<String>,
-) -> Result<(HeaderMap, String), StatusCode> {
-    let connection = state
+    user: AuthenticatedUser,
+) -> Result<(HeaderMap, String), DownloadResultsError> {
+    // This also checks if the user has access to the survey
+    let _survey_name = state
         .database
-        .connect()
-        .expect("Error connecting to database");
+        .get_attrakdiff_survey_name(&survey_id, &user.id)
+        .await
+        .map_err(DownloadResultsError::GetSurveyError)?;
 
-    let result = connection
-        .query(
-            "SELECT * FROM attrakdiff_responses WHERE survey_id = :survey_id",
-            named_params![":survey_id": survey_id.clone()],
-        )
-        .await;
-    let mut rows = match result {
-        Ok(rows) => rows,
-        Err(error) => {
-            tracing::error!("Error querying for AttrakDiff survey: {:?}", error);
-            //TODO display user error message it's not their fault
-            return Err(StatusCode::INTERNAL_SERVER_ERROR);
-        }
-    };
+    //TODO check if this file can be streamed line by line and row by row
+    let responses = state
+        .database
+        .get_attrakdiff_survey_responses(&survey_id)
+        .await
+        .map_err(DownloadResultsError::GetSurveyResponsesError)?;
 
     let mut csv = String::new();
 
     csv += "Human-Technical, Isolating-Connective, Pleasant-Unpleasant, Inventive-Conventional, Simple-Complicated, Professional-Unprofessional, Ugly-Attractive, Practical-Impractical, Likable-Disagreeable, Cumbersome-Straightforward, Stylish-Tacky, Predictable-Unpredictable, Cheap-Premium, Alienating-Integrating, Brings me closer to people-Separates me from people, Unpresentable-Respondents, Rejecting-Inviting, Unimaginative-Creative, Good-Bad, Confusing-Clearly structured, Repelling-Appealing, Bold-Cautious, Innovative-Conservative, Dull-Captivating, Undemanding-Challenging, Motivating-Discouraging, Novel-Ordinary, Unruly-Manageable\n";
 
-    loop {
-        let result = rows.next().await;
-        match result {
-            Ok(None) => break,
-            Ok(Some(row)) => {
-                for index in 2u8..30 {
-                    let answer = row.get::<i32>(index.into());
-                    let answer = match answer {
-                        Ok(answer) => answer,
-                        Err(error) => {
-                            tracing::error!("Error reading survey id: {:?}", error);
-                            //TODO display user error message it's not their fault
-                            return Err(StatusCode::INTERNAL_SERVER_ERROR);
-                        }
-                    };
-                    csv += &format!("{}, ", answer);
-                }
-                // geht schöner iwie
-                csv.pop();
-                csv.pop();
-                csv.push('\n');
-            }
-            Err(error) => {
-                tracing::error!("Error reading query result: {:?}", error);
-                //TODO display user error message it's not their fault
-                return Err(StatusCode::INTERNAL_SERVER_ERROR);
-            }
+    for response in responses {
+        for answer in response {
+            csv += &format!("{}, ", answer);
         }
+        // Pop the trailing comma and space
+        csv.pop();
+        csv.pop();
+        csv.push('\n');
     }
 
     let mut headers = HeaderMap::new();

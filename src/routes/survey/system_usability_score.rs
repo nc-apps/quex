@@ -29,10 +29,10 @@ pub const QUESTIONS: [&str; 10] = [
 #[derive(Template)]
 #[template(path = "surveys/responses/system usability score.html")]
 struct SusTemplate {
-    id: String,
+    id: Arc<str>,
 }
 
-pub(super) fn get_page(id: String) -> askama_axum::Response {
+pub(super) fn get_page(id: Arc<str>) -> askama_axum::Response {
     let sus_template = SusTemplate { id };
 
     sus_template.into_response()
@@ -65,7 +65,7 @@ pub(super) struct CreateResponseRequest {
 pub(super) async fn create_response(
     State(app_state): State<AppState>,
     Form(sus_answers): Form<CreateResponseRequest>,
-    survey_id: String,
+    survey_id: Arc<str>,
 ) -> Redirect {
     tracing::debug!("Answers for SUS: {:?}", sus_answers);
     let response_id = nanoid!();

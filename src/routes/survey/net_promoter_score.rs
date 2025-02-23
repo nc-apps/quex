@@ -16,10 +16,10 @@ use time::OffsetDateTime;
 #[derive(Template)]
 #[template(path = "surveys/responses/net promoter score.html")]
 struct NpsTemplate {
-    id: String,
+    id: Arc<str>,
 }
 
-pub(super) fn get_page(id: String) -> askama_axum::Response {
+pub(super) fn get_page(id: Arc<str>) -> askama_axum::Response {
     let nps_template = NpsTemplate { id };
 
     nps_template.into_response()
@@ -36,7 +36,7 @@ pub(super) struct Response {
 pub(super) async fn create_response(
     State(app_state): State<AppState>,
     Form(nps_answers): Form<Response>,
-    survey_id: String,
+    survey_id: Arc<str>,
 ) -> Redirect {
     tracing::debug!("Answers for NPS: {:?}", nps_answers);
     let response_id = nanoid!();

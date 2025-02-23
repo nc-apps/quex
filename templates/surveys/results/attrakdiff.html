@@ -67,7 +67,7 @@
                 <div class="px-4 py-6 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-0">
                     <dt class="text-sm font-medium leading-6 text-gray-900">Total Responses</dt>
                     {# TODO this does not work anymore when paging is introduced #}
-                    <dd class="mt-1 text-sm leading-6 text-gray-700 sm:col-span-2 sm:mt-0">{{ answers.len() }}</dd>
+                    <dd class="mt-1 text-sm leading-6 text-gray-700 sm:col-span-2 sm:mt-0">{{ responses.len() }}</dd>
                 </div>
                 <div class="px-4 py-6 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-0">
                     <dt class="text-sm font-medium leading-6 text-gray-900">Response link</dt>
@@ -180,20 +180,20 @@
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-200">
-                            {% for answer in answers %}
+                            {% for response in responses %}
                             <tr>
                                 {% for index in 0..28 %}
                                 {% if loop.first %}
                                 <td class="py-4 pl-4 pr-3 text-sm font-medium text-gray-900 whitespace-nowrap sm:pl-0">
-                                    {{ answer[index] }}
+                                    {{ response[index] }}
                                 </td>
                                 {% else if loop.last %}
                                 <td
                                     class="relative py-4 pl-3 pr-4 text-sm font-medium text-right whitespace-nowrap sm:pr-0">
-                                    {{ answer[index] }}
+                                    {{ response[index] }}
                                 </td>
                                 {% else %}
-                                <td class="px-3 py-4 text-sm text-gray-500 whitespace-nowrap">{{ answer[index] }}</td>
+                                <td class="px-3 py-4 text-sm text-gray-500 whitespace-nowrap">{{ response[index] }}</td>
                                 {% endif %}
                                 {% endfor %}
                             </tr>

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::database::QueryError;
+use crate::database::StatementError;
 use crate::AppState;
 use askama_axum::{IntoResponse, Template};
 use authenticated_user::AuthenticatedUser;
@@ -15,7 +15,6 @@ use axum::{
 use axum_extra::extract::SignedCookieJar;
 use base64::{prelude::BASE64_URL_SAFE_NO_PAD, Engine};
 use getrandom::getrandom;
-use libsql::named_params;
 use nanoid::nanoid;
 use open_id_connect::{authentication_response, get_sign_in_with_google_url};
 use serde::{Deserialize, Serialize};
@@ -214,9 +213,9 @@ enum CompleteSignUpError {
     #[error("Signin token is expired")]
     Expired,
     #[error("Error inserting user: {0}")]
-    InsertUserError(QueryError),
+    InsertUserError(StatementError),
     #[error("Error inserting google account connection: {0}")]
-    InsertGoogleAccountConnectionError(QueryError),
+    InsertGoogleAccountConnectionError(StatementError),
     #[error("Error creating cookie: {0}")]
     CreateCookieError(#[from] postcard::Error),
 }

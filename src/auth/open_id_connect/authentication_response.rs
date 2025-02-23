@@ -6,7 +6,6 @@ use axum::{
     http,
 };
 use axum_extra::extract::SignedCookieJar;
-use libsql::named_params;
 use serde::{Deserialize, Serialize};
 use url::Url;
 
@@ -14,6 +13,7 @@ use super::{discovery, SetSchemeError, ValidateIdTokenError};
 use crate::auth::open_id_connect::{ensure_https, validate_id_token};
 use crate::auth::token::complete_signin::{CompleteSignInToken, EncodeTokenError};
 use crate::auth::{cookie, create_redirect_url};
+use crate::database::SingleRowQueryError;
 use crate::{
     auth::{AntiForgeryToken, BadServerUrl},
     AppState,
@@ -68,6 +68,8 @@ pub(in crate::auth) struct AuthenticationResponse {
 pub(in crate::auth) enum HandleAuthenticationResponseError {
     #[error("Invalid anti-forgery token in state parameter")]
     InvalidAntiForgeryToken,
+    #[error("Error parsing url: {0}")]
+    ParseError(url::ParseError),
     #[error("Error response from google. This can happen when the user cancels the sign in flow")]
     ErrorResponse(#[from] AuthenticationError),
     #[error("Failed to get discovery document")]
@@ -91,11 +93,11 @@ pub(in crate::auth) enum HandleAuthenticationResponseError {
     #[error("Error connecting to database: {0}")]
     DatabaseConnectionError(libsql::Error),
     #[error("Error checking for existing user: {0}")]
-    GetUserError(libsql::Error),
+    GetUserError(#[from] SingleRowQueryError),
     #[error("Error creating cookie: {0}")]
     CreateCookieError(#[from] postcard::Error),
     #[error("Error creating complete signup redirect url: {0}")]
-    CreateCompleteSignupUrlError(#[from] url::ParseError),
+    CreateCompleteSignupUrlError(url::ParseError),
 }
 
 impl IntoResponse for HandleAuthenticationResponseError {
@@ -156,7 +158,9 @@ pub(in crate::auth) async fn handle(
         AuthenticationResult::Error(error) => return Err(error.into()),
     };
 
-    let url = Url::parse("https://accounts.google.com").unwrap();
+    let url = Url::parse("https://accounts.google.com")
+        .map_err(HandleAuthenticationResponseError::ParseError)?;
+
     // Exchange code for access token
     let discovery_document = state.discovery_cache.get(url).await?;
     let mut token_endpoint = discovery_document.token_endpoint.clone();
@@ -201,30 +205,14 @@ pub(in crate::auth) async fn handle(
         validate_id_token(&response.id_token, &state.client, keys_url, &credentials.id).await?;
 
     // Check if user already exists
-    let connection = state
+    let existing_user_id = state
         .database
-        .connect()
-        .map_err(HandleAuthenticationResponseError::DatabaseConnectionError)?;
-
-    let mut rows = connection
-        .query(
-            "SELECT user_id FROM google_account_connections WHERE google_user_id = :id",
-            named_params![":id": claims.subject],
-        )
+        .get_user_id_by_google_user_id(&claims.subject)
         .await
         .map_err(HandleAuthenticationResponseError::GetUserError)?;
 
-    let row = rows
-        .next()
-        .await
-        .map_err(HandleAuthenticationResponseError::GetUserError)?;
-
-    let existing_user_id = row
-        .map(|row| row.get::<String>(0))
-        .transpose()
-        .map_err(HandleAuthenticationResponseError::GetUserError)?;
     if let Some(existing_user_id) = existing_user_id {
-        let cookie = cookie::create(existing_user_id.into())?;
+        let cookie = cookie::create(existing_user_id)?;
 
         return Ok((jar.add(cookie), Redirect::to("/surveys")).into_response());
     }
@@ -250,11 +238,11 @@ mod test {
     /// This tests not if serde works but if we constructed the structs and enums in a way serde
     /// can deserialize the query parameters
     #[test]
-    fn can_deserialize() {
+    fn can_deserialize() -> Result<(), serde_urlencoded::de::Error> {
         let query = "error=invalid_request&error_description=Invalid+request&state=123";
 
-        let _response: AuthenticationResponse = serde_urlencoded::from_str(query).unwrap();
-        let response: AuthenticationError = serde_urlencoded::from_str(query).unwrap();
+        let _response: AuthenticationResponse = serde_urlencoded::from_str(query)?;
+        let response: AuthenticationError = serde_urlencoded::from_str(query)?;
         assert_eq!(
             response.code,
             AuthenticationResponseErrorCode::InvalidRequest
@@ -262,9 +250,10 @@ mod test {
         assert_eq!(response.description, Some(Arc::from("Invalid request")));
 
         let query = "code=123&scope=openid+email&state=123";
-        let _response: AuthenticationResponse = serde_urlencoded::from_str(query).unwrap();
-        let response: AuthenticationSuccess = serde_urlencoded::from_str(query).unwrap();
+        let _response: AuthenticationResponse = serde_urlencoded::from_str(query)?;
+        let response: AuthenticationSuccess = serde_urlencoded::from_str(query)?;
         assert_eq!(response.code.as_ref(), "123");
         assert_eq!(response.scopes.as_ref(), "openid email");
+        Ok(())
     }
 }
