@@ -1,5 +1,5 @@
 use crate::auth::authenticated_user::AuthenticatedUser;
-use crate::database::SurveyType;
+use crate::database::{MultiRowQueryError, SingleRowQueryError, StatementError, SurveyType};
 use crate::{database, AppState};
 use askama::Template;
 use askama_axum::IntoResponse;
@@ -103,7 +103,9 @@ async fn get_surveys_page(
 #[derive(thiserror::Error, Debug)]
 enum CreateResponseError {
     #[error("Error reading survey from database: {0}")]
-    DatabaseError(#[from] database::GetSurveyError),
+    GetDataError(#[from] database::GetSurveyError),
+    #[error("Error creating response: {0}")]
+    InsertError(#[from] StatementError),
     #[error("Error deserializing form values for survey type {0:?} response: {1}")]
     FormError(SurveyType, FormRejection),
 }
@@ -140,7 +142,9 @@ async fn create_response(
                 .await
                 .map_err(|error| CreateResponseError::FormError(SurveyType::Attrakdiff, error))?;
 
-            Ok(attrakdiff::create_response(state, form, survey_id).await)
+            attrakdiff::create_response(state, form, survey_id)
+                .await
+                .map_err(CreateResponseError::InsertError)
         }
         SurveyType::NetPromoterScore => {
             let form = Form::<net_promoter_score::Response>::from_request(request, &state)
@@ -149,18 +153,20 @@ async fn create_response(
                     CreateResponseError::FormError(SurveyType::NetPromoterScore, error)
                 })?;
 
-            Ok(net_promoter_score::create_response(state, form, survey_id).await)
+            net_promoter_score::create_response(state, form, survey_id)
+                .await
+                .map_err(CreateResponseError::InsertError)
         }
         SurveyType::SystemUsabilityScore => {
-            let form = Form::<system_usability_score::CreateResponseRequest>::from_request(
-                request, &state,
-            )
-            .await
-            .map_err(|error| {
-                CreateResponseError::FormError(SurveyType::SystemUsabilityScore, error)
-            })?;
+            let form = Form::<system_usability_score::Response>::from_request(request, &state)
+                .await
+                .map_err(|error| {
+                    CreateResponseError::FormError(SurveyType::SystemUsabilityScore, error)
+                })?;
 
-            Ok(system_usability_score::create_response(state, form, survey_id).await)
+            system_usability_score::create_response(state, form, survey_id)
+                .await
+                .map_err(CreateResponseError::InsertError)
         }
     }
 }
@@ -218,7 +224,7 @@ struct CreateSurveyRequest {
 #[derive(thiserror::Error, Debug)]
 pub(super) enum CreateSurveyError {
     #[error("Error creating survey: {0}")]
-    Database(#[from] libsql::Error),
+    Database(#[from] StatementError),
 }
 
 impl IntoResponse for CreateSurveyError {
@@ -328,4 +334,28 @@ pub(crate) fn get_file_name(survey_id: &str) -> String {
     // The survey id should be URL safe and ASCII only by default
     assert!(survey_id.is_ascii());
     format!("survey responses {}.csv", survey_id)
+}
+
+#[derive(thiserror::Error, Debug)]
+enum GetResultsPageError {
+    #[error("Error getting survey: {0}")]
+    GetSurveyError(SingleRowQueryError),
+    #[error("Error getting survey responses: {0}")]
+    GetSurveyResponsesError(MultiRowQueryError),
+}
+
+#[derive(thiserror::Error, Debug)]
+enum DownloadResultsError {
+    #[error("Error getting survey: {0}")]
+    GetSurveyError(SingleRowQueryError),
+
+    #[error("Error getting survey responses: {0}")]
+    GetSurveyResponsesError(MultiRowQueryError),
+}
+
+impl IntoResponse for DownloadResultsError {
+    fn into_response(self) -> askama_axum::Response {
+        tracing::error!("Error downloading results: {}", self);
+        http::StatusCode::INTERNAL_SERVER_ERROR.into_response()
+    }
 }

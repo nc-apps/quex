@@ -4,7 +4,11 @@ use libsql::{named_params, params::IntoParams, Builder, Database as LibsqlDataba
 use serde::Deserialize;
 use time::OffsetDateTime;
 
-use crate::survey::{attrakdiff, format_date, Survey, Surveys};
+use crate::survey::{
+    attrakdiff, format_date, net_promoter_score,
+    system_usability_score::{self, Response2, Score},
+    Survey, Surveys,
+};
 
 #[derive(thiserror::Error, Debug)]
 #[error("Error creating database: {0}")]
@@ -257,6 +261,7 @@ impl Database {
         )
         .await
     }
+
     pub(crate) async fn insert_attrakdiff_response(
         &self,
         survey_id: &str,
@@ -524,5 +529,307 @@ impl Database {
             "system usability score" => Ok(Some(SurveyType::SystemUsabilityScore)),
             other => Err(GetSurveyError::UnexpectedSurveyType(other.into())),
         }
+    }
+
+    pub(crate) async fn insert_net_promoter_score_survey(
+        &self,
+        survey_id: &str,
+        user_id: &str,
+        survey_name: &str,
+        created_at_utc: i64,
+    ) -> Result<(), StatementError> {
+        self.insert(
+            "INSERT INTO net_promoter_score_surveys (\
+            id,\
+            user_id,\
+            name,\
+            created_at_utc\
+            ) \
+            VALUES (\
+                :id,\
+                :user_id,\
+                :name,\
+                :created_at_utc\
+            )",
+            named_params! {
+                ":id": survey_id,
+                ":user_id": user_id,
+                ":name": survey_name,
+                ":created_at_utc": created_at_utc,
+            },
+        )
+        .await
+    }
+
+    pub(crate) async fn insert_system_usability_score_survey(
+        &self,
+        survey_id: &str,
+        user_id: &str,
+        survey_name: &str,
+        created_at_utc: i64,
+    ) -> Result<(), StatementError> {
+        self.insert(
+            "INSERT INTO system_usability_score_surveys (\
+                id,\
+                user_id,\
+                name,\
+                created_at_utc\
+                ) \
+                VALUES (\
+                    :id,\
+                    :user_id,\
+                    :name,\
+                    :created_at_utc\
+                )",
+            named_params! {
+                ":id": survey_id,
+                ":user_id": user_id,
+                ":name": survey_name,
+                ":created_at_utc": created_at_utc,
+            },
+        )
+        .await
+    }
+
+    pub(crate) async fn insert_net_promoter_score_response(
+        &self,
+        survey_id: &str,
+        response_id: &str,
+        created_at_utc: i64,
+        response: net_promoter_score::Response,
+    ) -> Result<(), StatementError> {
+        self.insert(
+            "INSERT INTO net_promoter_score_responses (
+            id,
+            survey_id,
+            created_at_utc,
+            answer_1,
+            answer_2
+        ) VALUES (
+            ?1,
+            ?2,
+            ?3,
+            ?4
+        )",
+            libsql::named_params! {
+                ":id": response_id,
+                ":survey_id": survey_id,
+                ":created_at_utc": created_at_utc,
+                ":answer_1": response.q1,
+                ":answer_2": response.q2,
+            },
+        )
+        .await
+    }
+
+    /// This implicitly checks if a user has access to a survey
+    pub(crate) async fn get_net_promoter_score_survey_name(
+        &self,
+        survey_id: &str,
+        user_id: &str,
+    ) -> Result<Option<Arc<str>>, SingleRowQueryError> {
+        let connection = self.connect().await?;
+        let mut statement = connection
+            .prepare("SELECT name FROM net_promoter_score_surveys WHERE user_id = :user_id AND id = :survey_id")
+            .await
+            .map_err(StatementError::PrepareError)?;
+
+        let result = statement
+            .query_row(named_params! {
+                ":user_id": user_id,
+                ":survey_id": survey_id,
+            })
+            .await;
+
+        match result.and_then(|row| row.get_str(0).map(Arc::from)) {
+            Ok(name) => Ok(Some(name)),
+            Err(libsql::Error::QueryReturnedNoRows) => Ok(None),
+            Err(error) => Err(SingleRowQueryError::RowError(error)),
+        }
+    }
+
+    pub(crate) async fn get_net_promoter_score_survey_responses(
+        &self,
+        survey_id: &str,
+    ) -> Result<Vec<(i32, Option<String>)>, MultiRowQueryError> {
+        let mut rows = self
+            .query(
+                "SELECT * FROM net_promoter_score_responses WHERE survey_id = :survey_id",
+                named_params![":survey_id": survey_id.clone()],
+            )
+            .await?;
+
+        let mut responses = Vec::new();
+
+        while let Some(row) = rows
+            .next()
+            .await
+            .map_err(MultiRowQueryError::NextRowError)?
+        {
+            let answer_1: i32 = row.get(3).map_err(MultiRowQueryError::RowError)?;
+            let answer_2: Option<String> = row.get(3).map_err(MultiRowQueryError::RowError)?;
+
+            responses.push((answer_1, answer_2));
+        }
+
+        Ok(responses)
+    }
+
+    pub(crate) async fn insert_system_usability_score_response(
+        &self,
+        survey_id: &str,
+        response_id: &str,
+        created_at_utc: i64,
+        response: system_usability_score::Response,
+    ) -> Result<(), StatementError> {
+        self.insert(
+            "INSERT INTO system_usability_score_responses (
+                id,
+                survey_id,
+                created_at_utc,
+                answer_1,
+                answer_2,
+                answer_3,
+                answer_4,
+                answer_5,
+                answer_6,
+                answer_7,
+                answer_8,
+                answer_9,
+                answer_10
+            ) VALUES (
+                ?1,
+                ?2,
+                ?3,
+                ?4,
+                ?5,
+                ?6,
+                ?7,
+                ?8,
+                ?9,
+                ?10,
+                ?11,
+                ?12,
+                ?13)",
+            libsql::params![
+                response_id,
+                survey_id,
+                created_at_utc,
+                response.q1,
+                response.q2,
+                response.q3,
+                response.q4,
+                response.q5,
+                response.q6,
+                response.q7,
+                response.q8,
+                response.q9,
+                response.q10
+            ],
+        )
+        .await
+    }
+
+    /// This implicitly checks if a user has access to a survey
+    pub(crate) async fn get_system_usability_score_survey_name(
+        &self,
+        survey_id: &str,
+        user_id: &str,
+    ) -> Result<Option<Arc<str>>, SingleRowQueryError> {
+        let connection = self.connect().await?;
+        let mut statement = connection
+            .prepare("SELECT name FROM system_usability_score_surveys WHERE user_id = :user_id AND id = :survey_id")
+            .await
+            .map_err(StatementError::PrepareError)?;
+
+        let result = statement
+            .query_row(named_params! {
+                ":survey_id": survey_id,
+                ":user_id": user_id,
+            })
+            .await;
+
+        match result.and_then(|row| row.get_str(0).map(Arc::from)) {
+            Ok(name) => Ok(Some(name)),
+            Err(libsql::Error::QueryReturnedNoRows) => Ok(None),
+            Err(error) => Err(SingleRowQueryError::RowError(error)),
+        }
+    }
+
+    pub(crate) async fn get_system_usability_score_survey_responses(
+        &self,
+        survey_id: &str,
+    ) -> Result<(Score, Vec<Response2>), MultiRowQueryError> {
+        let mut rows = self
+            .query(
+                "SELECT * FROM system_usability_score_responses WHERE survey_id = :survey_id",
+                named_params![":survey_id": survey_id.clone()],
+            )
+            .await?;
+
+        let mut responses = Vec::new();
+        let mut scores = Vec::new();
+
+        /// Offset for the fields that contain ids and timestamps
+        const META_DATA_OFFSET: usize = 3;
+        while let Some(row) = rows
+            .next()
+            .await
+            .map_err(MultiRowQueryError::NextRowError)?
+        {
+            let mut user_scores = [0; 10];
+            let mut score_sum = 0;
+            for index in 3u8..13 {
+                let score = row
+                    .get::<u32>(index.into())
+                    .map_err(MultiRowQueryError::RowError)?;
+
+                user_scores[usize::from(index - 3)] = score;
+
+                let is_positive_statement = index - 3 % 2 == 0;
+                if is_positive_statement {
+                    score_sum += score - 1;
+                } else {
+                    score_sum += 5 - score;
+                }
+            }
+
+            // Score multiplied by 100 to get a percentage that can be displayed
+            let score = score_sum as f64 * 100.0 / 40.0;
+            // Make it to whole numbers with 2 decimal places e.g. 72.12 -> 7212 so we can sort it (floats are not sortable)
+            let score = (score * 100.0).round() as u64;
+
+            responses.push(Response2 {
+                scores: user_scores,
+                //TODO number formatting localization
+                score: score as f64 / 100.0,
+            });
+        }
+
+        let score = if scores.len() > 0 {
+            let mean = scores.iter().sum::<u64>() as f64 / scores.len() as f64;
+            let variance = scores
+                .iter()
+                .map(|score| (*score as f64 - mean).powi(2))
+                .sum::<f64>()
+                / scores.len() as f64;
+            let standard_deviation = (variance).sqrt();
+            scores.sort_unstable();
+            let median = scores[scores.len() / 2] as f64 / 100.0;
+            let min = scores.iter().min().copied().unwrap() as f64 / 100.0;
+            let max = scores.iter().max().copied().unwrap() as f64 / 100.0;
+            Score {
+                mean: mean / 100.0,
+                variance: variance / 100.0,
+                standard_deviation: standard_deviation / 100.0,
+                median,
+                min,
+                max,
+            }
+        } else {
+            Score::default()
+        };
+
+        Ok((score, responses))
     }
 }

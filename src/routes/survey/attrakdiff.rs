@@ -1,5 +1,5 @@
 use crate::auth::authenticated_user::AuthenticatedUser;
-use crate::database::{MultiRowQueryError, SingleRowQueryError};
+use crate::database::{MultiRowQueryError, SingleRowQueryError, StatementError};
 use crate::routes::create_share_link;
 use crate::routes::survey::get_file_name;
 use crate::AppState;
@@ -15,6 +15,8 @@ use reqwest::{header, StatusCode};
 use serde::Deserialize;
 use std::sync::Arc;
 use time::OffsetDateTime;
+
+use super::{CreateSurveyError, DownloadResultsError, GetResultsPageError};
 
 /// The HTML template for the AttrakDiff survey
 #[derive(Template)]
@@ -131,18 +133,18 @@ pub(super) async fn create_response(
     State(state): State<AppState>,
     Form(response): Form<Response>,
     survey_id: Arc<str>,
-) -> Redirect {
+) -> Result<Redirect, StatementError> {
     let response_id = nanoid!();
     let now = OffsetDateTime::now_utc().unix_timestamp();
 
     state
         .database
         .insert_attrakdiff_response(&survey_id, &response_id, now, response)
-        .await;
+        .await?;
 
     tracing::debug!("Inserted into database");
 
-    Redirect::to("/thanks")
+    Ok(Redirect::to("/thanks"))
 }
 
 /// Handler that creates a new AttrakDiff survey from a create survey form submission
@@ -167,7 +169,7 @@ pub(super) async fn create_new_survey(
     state
         .database
         .insert_attrakdiff_survey(&survey_id, &user.id, &name, now)
-        .await;
+        .await?;
 
     // Redirect to newly created survey overview
     Ok(Redirect::to(format!("/surveys/ad/{}", survey_id).as_ref()))
@@ -183,14 +185,6 @@ struct AttrakdiffResultsTemplate {
     responses: Vec<[i32; 28]>,
     /// The url that can be used to share the survey with respondents
     survey_url: String,
-}
-
-#[derive(thiserror::Error, Debug)]
-pub(super) enum GetResultsPageError {
-    #[error("Error getting survey: {0}")]
-    GetSurveyError(SingleRowQueryError),
-    #[error("Error getting survey responses: {0}")]
-    GetSurveyResponsesError(MultiRowQueryError),
 }
 
 impl IntoResponse for GetResultsPageError {
@@ -233,32 +227,21 @@ pub(super) async fn get_results_page(
     .into_response())
 }
 
-#[derive(thiserror::Error, Debug)]
-enum DownloadResultsError {
-    #[error("Error getting survey: {0}")]
-    GetSurveyError(SingleRowQueryError),
-    #[error("Error getting survey responses: {0}")]
-    GetSurveyResponsesError(MultiRowQueryError),
-}
-
-impl IntoResponse for DownloadResultsError {
-    fn into_response(self) -> askama_axum::Response {
-        tracing::error!("Error downloading results: {}", self);
-        http::StatusCode::INTERNAL_SERVER_ERROR.into_response()
-    }
-}
-
 pub(super) async fn download_results(
     State(state): State<AppState>,
     Path(survey_id): Path<String>,
     user: AuthenticatedUser,
-) -> Result<(HeaderMap, String), DownloadResultsError> {
+) -> Result<impl IntoResponse, DownloadResultsError> {
     // This also checks if the user has access to the survey
-    let _survey_name = state
+    let survey_name = state
         .database
         .get_attrakdiff_survey_name(&survey_id, &user.id)
         .await
         .map_err(DownloadResultsError::GetSurveyError)?;
+
+    if survey_name.is_none() {
+        return Ok(StatusCode::NOT_FOUND.into_response());
+    }
 
     //TODO check if this file can be streamed line by line and row by row
     let responses = state
@@ -289,5 +272,5 @@ pub(super) async fn download_results(
     let value = HeaderValue::try_from(value).expect("Invalid characters in survey id");
     headers.insert(header::CONTENT_DISPOSITION, value);
 
-    Ok((headers, csv))
+    Ok((headers, csv).into_response())
 }
