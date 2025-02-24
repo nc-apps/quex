@@ -287,8 +287,8 @@ pub(crate) fn format_date(date: OffsetDateTime) -> String {
 
     // let formatted = formatter.format(&date);
 
-    let date_string = formatter.format_to_string(&date);
-    date_string
+    
+    formatter.format_to_string(&date)
 }
 
 #[test]
@@ -309,7 +309,7 @@ fn format_date_test() {
 
     // You can work with a formatter that can select the calendar at runtime:
     let locale = Locale::from_str("en-u-ca-gregory").unwrap();
-    let dtf = DateTimeFormatter::try_new(&locale.into(), options.clone())
+    let dtf = DateTimeFormatter::try_new(&locale.into(), options)
         .expect("Failed to create DateTimeFormatter instance.");
 
     // Or one that selects a calendar at compile time:

@@ -90,7 +90,7 @@ async fn validate_id_token(
     let response = client.get(jwks_uri).send().await?.error_for_status()?;
     let jwks: JwkSet = response.json().await?;
 
-    let header = jsonwebtoken::decode_header(&id_token)?;
+    let header = jsonwebtoken::decode_header(id_token)?;
     let key_id = header.kid.ok_or(ValidateIdTokenError::NoKeyId)?;
     let key = jwks.find(&key_id).ok_or(ValidateIdTokenError::MissingKey)?;
 

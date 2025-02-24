@@ -221,5 +221,5 @@ pub(super) async fn download_results(
     let value = HeaderValue::try_from(value).expect("Invalid characters in survey id");
     headers.insert(header::CONTENT_DISPOSITION, value);
 
-    return Ok((headers, csv).into_response());
+    Ok((headers, csv).into_response())
 }

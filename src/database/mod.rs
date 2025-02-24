@@ -114,7 +114,7 @@ impl Database {
 
         let query = include_str!("./create_tables.sql");
         connection
-            .execute_batch(&query)
+            .execute_batch(query)
             .await
             .map_err(InitializationError::CreateTablesError)?;
 
@@ -802,7 +802,7 @@ impl Database {
             });
         }
 
-        let score = if scores.len() > 0 {
+        let score = if !scores.is_empty() {
             let mean = scores.iter().sum::<u64>() as f64 / scores.len() as f64;
             let variance = scores
                 .iter()

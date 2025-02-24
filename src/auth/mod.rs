@@ -83,7 +83,7 @@ impl Nonce {
         // Length is arbitrary there seems to be no requirement
         let mut nonce = [0; 30];
         getrandom(&mut nonce)?;
-        let nonce = BASE64_URL_SAFE_NO_PAD.encode(&nonce);
+        let nonce = BASE64_URL_SAFE_NO_PAD.encode(nonce);
         Ok(Self(nonce))
     }
 }

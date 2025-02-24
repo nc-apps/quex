@@ -26,9 +26,9 @@ impl Signer {
         let mut hmac: Hmac<Sha256> =
             Hmac::<Sha256>::new_from_slice(&self.key).expect("HMAC key should be 32 bytes");
         hmac.update(data);
-        let result = hmac.finalize().into_bytes();
+        
 
-        result
+        hmac.finalize().into_bytes()
     }
 
     pub(crate) fn is_valid(&self, data: &[u8], signature: &[u8; 32]) -> bool {
@@ -56,13 +56,13 @@ impl AntiForgeryTokenProvider {
     ) -> Result<AntiForgeryToken, CreateAntiForgeryTokenError> {
         let mut token = [0; TOKEN_LENGTH];
 
-        let mut unique = &mut token[SIGNATURE_LENGTH..];
-        getrandom::getrandom(&mut unique)?;
-        let signature = self.signer.sign(&unique);
+        let unique = &mut token[SIGNATURE_LENGTH..];
+        getrandom::getrandom(unique)?;
+        let signature = self.signer.sign(unique);
 
         token[..SIGNATURE_LENGTH].copy_from_slice(signature.as_ref());
 
-        Ok(AntiForgeryToken(BASE64_URL_SAFE_NO_PAD.encode(&token)))
+        Ok(AntiForgeryToken(BASE64_URL_SAFE_NO_PAD.encode(token)))
     }
 
     pub(super) fn is_token_valid(&self, AntiForgeryToken(token): &AntiForgeryToken) -> bool {
