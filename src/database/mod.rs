@@ -405,14 +405,12 @@ impl Database {
         let mut rows = self
             .query(
                 "SELECT * FROM attrakdiff_responses WHERE survey_id = :survey_id",
-                named_params![":survey_id": survey_id.clone()],
+                named_params![":survey_id": survey_id],
             )
             .await?;
 
         let mut responses = Vec::new();
 
-        /// Offset for the fields that contain ids and timestamps
-        const META_DATA_OFFSET: usize = 3;
         while let Some(row) = rows
             .next()
             .await
@@ -655,7 +653,7 @@ impl Database {
         let mut rows = self
             .query(
                 "SELECT * FROM net_promoter_score_responses WHERE survey_id = :survey_id",
-                named_params![":survey_id": survey_id.clone()],
+                named_params![":survey_id": survey_id],
             )
             .await?;
 
@@ -763,15 +761,13 @@ impl Database {
         let mut rows = self
             .query(
                 "SELECT * FROM system_usability_score_responses WHERE survey_id = :survey_id",
-                named_params![":survey_id": survey_id.clone()],
+                named_params![":survey_id": survey_id],
             )
             .await?;
 
         let mut responses = Vec::new();
         let mut scores = Vec::new();
 
-        /// Offset for the fields that contain ids and timestamps
-        const META_DATA_OFFSET: usize = 3;
         while let Some(row) = rows
             .next()
             .await

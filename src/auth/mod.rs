@@ -94,6 +94,10 @@ enum ResponseType {
     Code,
 }
 
+#[allow(
+    unused,
+    reason = "Kept for reference. Expected to be removed when compiled"
+)]
 #[derive(Serialize, Debug)]
 #[serde(rename_all = "snake_case")]
 enum Prompt {

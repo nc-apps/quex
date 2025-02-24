@@ -6,7 +6,7 @@ use crate::AppState;
 use askama::Template;
 use askama_axum::IntoResponse;
 use axum::extract::{Path, State};
-use axum::http::{self, HeaderMap, HeaderValue};
+use axum::http::{HeaderMap, HeaderValue};
 use axum::response::Redirect;
 use axum::Form;
 use nanoid::nanoid;

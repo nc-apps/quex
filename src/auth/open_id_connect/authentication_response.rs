@@ -46,6 +46,10 @@ pub(in crate::auth) struct AuthenticationError {
 pub(in crate::auth) struct AuthenticationSuccess {
     code: Arc<str>,
     #[serde(rename = "scope")]
+    #[allow(
+        unused,
+        reason = "Kept for reference. Expected to be removed when compiled"
+    )]
     scopes: Arc<str>,
 }
 
@@ -90,14 +94,11 @@ pub(in crate::auth) enum HandleAuthenticationResponseError {
     VerifyIdTokenError(#[from] ValidateIdTokenError),
     #[error("Error creating complete sign in token: {0}")]
     EncodeTokenError(#[from] EncodeTokenError),
-    #[error("Error connecting to database: {0}")]
-    DatabaseConnectionError(libsql::Error),
+
     #[error("Error checking for existing user: {0}")]
     GetUserError(#[from] SingleRowQueryError),
     #[error("Error creating cookie: {0}")]
     CreateCookieError(#[from] postcard::Error),
-    #[error("Error creating complete signup redirect url: {0}")]
-    CreateCompleteSignupUrlError(url::ParseError),
 }
 
 impl IntoResponse for HandleAuthenticationResponseError {
@@ -127,6 +128,10 @@ struct AccessTokenRequest {
     grant_type: GrantType,
 }
 
+#[allow(
+    unused,
+    reason = "Kept for reference. Expected to be removed when compiled"
+)]
 #[derive(Deserialize, Debug)]
 struct AccessTokenResponse {
     access_token: Arc<str>,

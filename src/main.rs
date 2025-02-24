@@ -23,8 +23,6 @@ mod secret;
 
 #[derive(thiserror::Error, Debug)]
 enum SigningSecretError {
-    #[error("Error reading signing secret")]
-    ReadError(env::VarError),
     #[error("Error decoding signing secret")]
     DecodeError(base64::DecodeError),
     #[error("Signing secret is not {expected_length} bytes long")]
@@ -67,15 +65,10 @@ enum AppError {
 
     #[error("Error reading google client id")]
     ReadClientIdError(env::VarError),
-    #[error("Error reading google client secret")]
-    ReadClientSecretError(env::VarError),
     #[error("Error reading Turso database url")]
     ReadDatabaseUrlError(env::VarError),
     #[error("Error initializing database: {0}")]
     DatabaseInitializationError(#[from] database::InitializationError),
-
-    #[error("Either google client id or secret is missing")]
-    MissingClientIdOrSecret,
 
     #[error("Error reading anti forgery token signing secret")]
     AntiForgerySecretError(SigningSecretError),
@@ -83,8 +76,6 @@ enum AppError {
     GoogleUserIdSigningSecretError(SigningSecretError),
     #[error("Error reading cookie signing secret")]
     CookieSigningSecretError(SigningSecretError),
-    #[error("Error creating cookie key")]
-    CreateCookieKeyError,
 
     #[error("Error setting up secrets")]
     SecretError(#[from] secret::Error),

@@ -320,8 +320,8 @@ fn format_date_test() {
     // prefer using ISO dates with DateTimeFormatter
     let date = typed_date.to_iso().to_any();
 
-    let formatted_date = dtf.format(&date).expect("Calendars should match");
-    let typed_formatted_date = typed_dtf.format(&typed_date);
+    let _formatted_date = dtf.format(&date).expect("Calendars should match");
+    let _typed_formatted_date = typed_dtf.format(&typed_date);
 
     let formatted_date_string = dtf.format_to_string(&date).expect("Calendars should match");
     let typed_formatted_date_string = typed_dtf.format_to_string(&typed_date);

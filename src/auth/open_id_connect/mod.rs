@@ -15,7 +15,7 @@ pub(crate) mod discovery;
 
 #[derive(thiserror::Error, Debug)]
 #[error("Failed to set scheme to https")]
-struct SetSchemeError;
+pub(crate) struct SetSchemeError;
 
 fn ensure_https(url: &mut Url) -> Result<(), SetSchemeError> {
     if url.scheme() != "https" {
@@ -33,6 +33,10 @@ enum GoogleIssuer {
     HttpsAccounts,
 }
 
+#[allow(
+    unused,
+    reason = "Kept for reference. Expected to be removed when compiled"
+)]
 #[derive(Deserialize, Debug)]
 struct Claims {
     #[serde(rename = "aud")]
@@ -58,7 +62,7 @@ struct Claims {
 }
 
 #[derive(thiserror::Error, Debug)]
-enum ValidateIdTokenError {
+pub(crate) enum ValidateIdTokenError {
     #[error("Failed to ensure url uses https: {0}")]
     EnsureHttpsError(#[from] SetSchemeError),
     #[error("Failed to send request for verification keys: {0}")]

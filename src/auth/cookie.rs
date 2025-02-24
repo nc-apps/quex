@@ -14,11 +14,6 @@ use super::AppState;
 pub(crate) struct Key(AxumKey);
 
 pub(super) const NAME: &str = "session";
-impl Key {
-    pub(crate) fn new() -> Option<Self> {
-        AxumKey::try_generate().map(Self)
-    }
-}
 
 impl From<&[u8; 64]> for Key {
     fn from(key: &[u8; 64]) -> Self {
@@ -67,7 +62,7 @@ impl Session {
 }
 
 #[derive(Error, Debug)]
-pub(super) enum Error {
+pub(crate) enum Error {
     #[error("Bad cookie encoding: {0}")]
     BadCookieEncoding(#[from] base64::DecodeError),
     #[error("Bad cookie: {0}")]

@@ -22,7 +22,7 @@ pub(super) enum ErrorType {
 }
 
 #[derive(Debug, Clone, Copy)]
-enum Secret {
+pub(crate) enum Secret {
     CookieSigningSecret,
     LibSqlAuthToken,
     GoogleClientSecret,
