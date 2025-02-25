@@ -1,21 +1,21 @@
 use crate::auth::authenticated_user::AuthenticatedUser;
 use crate::database::StatementError;
 use crate::routes::create_share_link;
-use crate::survey::get_file_name;
 use crate::AppState;
 use askama::Template;
 use askama_axum::IntoResponse;
 use axum::extract::{Path, State};
-use axum::http::{HeaderMap, HeaderValue};
 use axum::response::Redirect;
 use axum::Form;
 use nanoid::nanoid;
-use reqwest::{header, StatusCode};
+use reqwest::StatusCode;
 use serde::Deserialize;
 use std::sync::Arc;
 use time::OffsetDateTime;
 
-use super::{CreateSurveyError, DownloadResultsError, GetResultsPageError};
+use super::{
+    create_csv_download_headers, CreateSurveyError, DownloadResultsError, GetResultsPageError,
+};
 
 pub const QUESTIONS: [&str; 10] = [
     "I think that I would like to use this system frequently",
@@ -179,8 +179,7 @@ pub(super) async fn download_results(
     let survey_name = state
         .database
         .get_system_usability_score_survey_name(&survey_id, &user.id)
-        .await
-        .map_err(DownloadResultsError::GetSurveyError)?;
+        .await?;
 
     if survey_name.is_none() {
         return Ok(StatusCode::NOT_FOUND.into_response());
@@ -189,8 +188,7 @@ pub(super) async fn download_results(
     let (_score, responses) = state
         .database
         .get_system_usability_score_survey_responses(&survey_id)
-        .await
-        .map_err(DownloadResultsError::GetSurveyResponsesError)?;
+        .await?;
 
     let mut csv = String::new();
 
@@ -213,13 +211,7 @@ pub(super) async fn download_results(
         );
     }
 
-    let mut headers = HeaderMap::new();
-    const TEXT_CSV: HeaderValue = HeaderValue::from_static("text/csv");
-    headers.insert(header::CONTENT_TYPE, TEXT_CSV);
-    // The survey id should be URL safe and ASCII only by default
-    let value = format!("attachment; filename=\"{}\"", get_file_name(&survey_id));
-    let value = HeaderValue::try_from(value).expect("Invalid characters in survey id");
-    headers.insert(header::CONTENT_DISPOSITION, value);
+    let headers = create_csv_download_headers(&survey_id)?;
 
     Ok((headers, csv).into_response())
 }

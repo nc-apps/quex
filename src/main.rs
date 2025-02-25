@@ -1,4 +1,8 @@
-#![deny(clippy::unwrap_used)]
+#![deny(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Use more specific error handling. If there is an exception to this rule, opt out with a code comment"
+)]
 
 use std::sync::Arc;
 use std::{env, net::Ipv4Addr};
@@ -210,26 +214,45 @@ pub(crate) struct AppState {
     pub(crate) cookie_key: cookie::Key,
 }
 
+#[derive(thiserror::Error, Debug)]
+enum GracefulShutdownError {
+    #[error("Failed to install Ctrl-C handler: {0}")]
+    FailedCtrlCHandlerInstall(std::io::Error),
+    #[cfg(unix)]
+    #[error("Failed to install terminate signal handler: {0}")]
+    FailedTerminateHandlerInstall(std::io::Error),
+}
+
 async fn shutdown_signal() {
     let ctrl_c = async {
         signal::ctrl_c()
             .await
-            .expect("failed to install Ctrl+C handler");
+            .map_err(GracefulShutdownError::FailedCtrlCHandlerInstall)
     };
 
     #[cfg(unix)]
-    let terminate = async {
+    async fn wait_for_terminate() -> Result<(), GracefulShutdownError> {
         signal::unix::signal(signal::unix::SignalKind::terminate())
-            .expect("failed to install signal handler")
+            .map_err(GracefulShutdownError::FailedTerminateHandlerInstall)?
             .recv()
             .await;
-    };
+
+        Ok(())
+    }
 
     #[cfg(not(unix))]
     let terminate = std::future::pending::<()>();
 
-    tokio::select! {
-        _ = ctrl_c => {},
-        _ = terminate => {},
+    let error = tokio::select! {
+        result = ctrl_c => {
+            result
+        },
+        result = wait_for_terminate() => {
+            result
+        },
+    };
+
+    if let Err(error) = error {
+        tracing::error!("Error with shutdown signals: {}", error);
     }
 }

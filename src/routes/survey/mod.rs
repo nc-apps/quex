@@ -5,9 +5,11 @@ use askama::Template;
 use askama_axum::IntoResponse;
 use axum::extract::rejection::FormRejection;
 use axum::extract::{FromRequest, Path, Request, State};
+use axum::http::{HeaderMap, HeaderValue};
 use axum::response::{Redirect, Response};
 use axum::routing::{get, post};
 use axum::{http, Form, Router};
+use reqwest::header::{self, InvalidHeaderValue};
 use serde::Deserialize;
 use std::fmt::Debug;
 use std::sync::Arc;
@@ -257,8 +259,12 @@ async fn thanks() -> impl IntoResponse {
 }
 
 #[derive(thiserror::Error, Debug)]
-#[error("Error formatting date: {0}")]
-pub(crate) struct FormatDateError(icu::calendar::CalendarError);
+pub(crate) enum FormatDateError {
+    #[error("Error creating formatter: {0}")]
+    CreateFormatter(icu::datetime::DateTimeError),
+    #[error("Error formatting date: {0}")]
+    Format(icu::calendar::CalendarError),
+}
 
 pub(crate) fn format_date(date: OffsetDateTime) -> Result<String, FormatDateError> {
     // The icu example
@@ -275,7 +281,7 @@ pub(crate) fn format_date(date: OffsetDateTime) -> Result<String, FormatDateErro
     // Can use DateFormatter alternatively to dynamically format date based on accept-language header (see icu crate examples)
     // This uses unicode locale identifiers which might not line up with accept language header but should 99% of the time
     let formatter = TypedDateTimeFormatter::<Gregorian>::try_new(&locale!("en-US").into(), options)
-        .expect("Failed to create TypedDateTimeFormatter instance.");
+        .map_err(FormatDateError::CreateFormatter)?;
 
     let date = DateTime::try_new_gregorian_datetime(
         date.year(),
@@ -285,7 +291,7 @@ pub(crate) fn format_date(date: OffsetDateTime) -> Result<String, FormatDateErro
         date.minute(),
         date.second(),
     )
-    .map_err(FormatDateError)?;
+    .map_err(FormatDateError::Format)?;
 
     // let formatted = formatter.format(&date);
 
@@ -348,10 +354,13 @@ enum GetResultsPageError {
 #[derive(thiserror::Error, Debug)]
 enum DownloadResultsError {
     #[error("Error getting survey: {0}")]
-    GetSurveyError(SingleRowQueryError),
+    GetSurveyError(#[from] SingleRowQueryError),
 
     #[error("Error getting survey responses: {0}")]
-    GetSurveyResponsesError(MultiRowQueryError),
+    GetSurveyResponsesError(#[from] MultiRowQueryError),
+
+    #[error("Invalid survey id characters for header value: {0}")]
+    InvalidSurveyId(#[from] InvalidHeaderValue),
 }
 
 impl IntoResponse for DownloadResultsError {
@@ -359,4 +368,16 @@ impl IntoResponse for DownloadResultsError {
         tracing::error!("Error downloading results: {}", self);
         http::StatusCode::INTERNAL_SERVER_ERROR.into_response()
     }
+}
+
+fn create_csv_download_headers(survey_id: &str) -> Result<HeaderMap, InvalidHeaderValue> {
+    let mut headers = HeaderMap::new();
+    const TEXT_CSV: HeaderValue = HeaderValue::from_static("text/csv");
+    headers.insert(header::CONTENT_TYPE, TEXT_CSV);
+    // The survey id should be URL safe and ASCII only by default
+    let value = format!("attachment; filename=\"{}\"", get_file_name(survey_id));
+    let value = HeaderValue::try_from(value)?;
+    headers.insert(header::CONTENT_DISPOSITION, value);
+
+    Ok(headers)
 }

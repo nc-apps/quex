@@ -22,17 +22,20 @@ impl Signer {
         Self { key }
     }
 
+    fn get_hmac(&self) -> Hmac<Sha256> {
+        #[allow(clippy::expect_used, reason = "The key is guaranteed to be 32 bytes")]
+        Hmac::<Sha256>::new_from_slice(&self.key).expect("HMAC key should be 32 bytes")
+    }
+
     pub(crate) fn sign(&self, data: &[u8]) -> impl AsRef<[u8]> {
-        let mut hmac: Hmac<Sha256> =
-            Hmac::<Sha256>::new_from_slice(&self.key).expect("HMAC key should be 32 bytes");
+        let mut hmac: Hmac<Sha256> = self.get_hmac();
         hmac.update(data);
 
         hmac.finalize().into_bytes()
     }
 
     pub(crate) fn is_valid(&self, data: &[u8], signature: &[u8; 32]) -> bool {
-        let mut hmac: Hmac<Sha256> =
-            Hmac::<Sha256>::new_from_slice(&self.key).expect("HMAC key should be 32 bytes");
+        let mut hmac: Hmac<Sha256> = self.get_hmac();
 
         hmac.update(data);
         hmac.verify_slice(signature).is_ok()
@@ -77,5 +80,20 @@ impl AntiForgeryTokenProvider {
 
         self.signer
             .is_valid(&token_bytes[SIGNATURE_LENGTH..], &signature)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_anti_forgery_token() {
+        let signer = Signer::new([0; 32]);
+        assert_eq!(signer.key.len(), 32);
+        let provider = AntiForgeryTokenProvider::new(signer);
+
+        let token = provider.create_anti_forgery_token().unwrap();
+        assert!(provider.is_token_valid(&token));
     }
 }

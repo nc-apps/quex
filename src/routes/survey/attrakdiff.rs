@@ -1,22 +1,22 @@
 use crate::auth::authenticated_user::AuthenticatedUser;
 use crate::database::StatementError;
 use crate::routes::create_share_link;
-use crate::routes::survey::get_file_name;
 use crate::AppState;
 use askama::Template;
 use askama_axum::IntoResponse;
 use axum::extract::{Path, State};
-use axum::http::{self, HeaderMap};
+use axum::http::{self};
 use axum::response::Redirect;
 use axum::Form;
 use nanoid::nanoid;
-use reqwest::header::HeaderValue;
-use reqwest::{header, StatusCode};
+use reqwest::StatusCode;
 use serde::Deserialize;
 use std::sync::Arc;
 use time::OffsetDateTime;
 
-use super::{CreateSurveyError, DownloadResultsError, GetResultsPageError};
+use super::{
+    create_csv_download_headers, CreateSurveyError, DownloadResultsError, GetResultsPageError,
+};
 
 /// The HTML template for the AttrakDiff survey
 #[derive(Template)]
@@ -264,13 +264,7 @@ pub(super) async fn download_results(
         csv.push('\n');
     }
 
-    let mut headers = HeaderMap::new();
-    const TEXT_CSV: HeaderValue = HeaderValue::from_static("text/csv");
-    headers.insert(header::CONTENT_TYPE, TEXT_CSV);
-    // The survey id should be URL safe and ASCII only by default
-    let value = format!("attachment; filename=\"{}\"", get_file_name(&survey_id));
-    let value = HeaderValue::try_from(value).expect("Invalid characters in survey id");
-    headers.insert(header::CONTENT_DISPOSITION, value);
+    let headers = create_csv_download_headers(&survey_id)?;
 
     Ok((headers, csv).into_response())
 }
