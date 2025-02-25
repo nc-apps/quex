@@ -103,11 +103,11 @@ async fn get_surveys_page(
 #[derive(thiserror::Error, Debug)]
 enum CreateResponseError {
     #[error("Error reading survey from database: {0}")]
-    GetDataError(#[from] database::GetSurveyError),
+    GetData(#[from] database::GetSurveyError),
     #[error("Error creating response: {0}")]
-    InsertError(#[from] StatementError),
+    Insert(#[from] StatementError),
     #[error("Error deserializing form values for survey type {0:?} response: {1}")]
-    FormError(SurveyType, FormRejection),
+    Form(SurveyType, FormRejection),
 }
 
 impl IntoResponse for CreateResponseError {
@@ -140,33 +140,31 @@ async fn create_response(
         SurveyType::Attrakdiff => {
             let form = Form::<attrakdiff::Response>::from_request(request, &state)
                 .await
-                .map_err(|error| CreateResponseError::FormError(SurveyType::Attrakdiff, error))?;
+                .map_err(|error| CreateResponseError::Form(SurveyType::Attrakdiff, error))?;
 
             attrakdiff::create_response(state, form, survey_id)
                 .await
-                .map_err(CreateResponseError::InsertError)
+                .map_err(CreateResponseError::Insert)
         }
         SurveyType::NetPromoterScore => {
             let form = Form::<net_promoter_score::Response>::from_request(request, &state)
                 .await
-                .map_err(|error| {
-                    CreateResponseError::FormError(SurveyType::NetPromoterScore, error)
-                })?;
+                .map_err(|error| CreateResponseError::Form(SurveyType::NetPromoterScore, error))?;
 
             net_promoter_score::create_response(state, form, survey_id)
                 .await
-                .map_err(CreateResponseError::InsertError)
+                .map_err(CreateResponseError::Insert)
         }
         SurveyType::SystemUsabilityScore => {
             let form = Form::<system_usability_score::Response>::from_request(request, &state)
                 .await
                 .map_err(|error| {
-                    CreateResponseError::FormError(SurveyType::SystemUsabilityScore, error)
+                    CreateResponseError::Form(SurveyType::SystemUsabilityScore, error)
                 })?;
 
             system_usability_score::create_response(state, form, survey_id)
                 .await
-                .map_err(CreateResponseError::InsertError)
+                .map_err(CreateResponseError::Insert)
         }
     }
 }
@@ -258,7 +256,11 @@ async fn thanks() -> impl IntoResponse {
     ThanksTemplate {}.into_response()
 }
 
-pub(crate) fn format_date(date: OffsetDateTime) -> String {
+#[derive(thiserror::Error, Debug)]
+#[error("Error formatting date: {0}")]
+pub(crate) struct FormatDateError(icu::calendar::CalendarError);
+
+pub(crate) fn format_date(date: OffsetDateTime) -> Result<String, FormatDateError> {
     // The icu example
     use icu::calendar::{DateTime, Gregorian};
     use icu::datetime::{options::length, DateTimeFormatterOptions, TypedDateTimeFormatter};
@@ -283,12 +285,11 @@ pub(crate) fn format_date(date: OffsetDateTime) -> String {
         date.minute(),
         date.second(),
     )
-    .unwrap();
+    .map_err(FormatDateError)?;
 
     // let formatted = formatter.format(&date);
 
-    
-    formatter.format_to_string(&date)
+    Ok(formatter.format_to_string(&date))
 }
 
 #[test]

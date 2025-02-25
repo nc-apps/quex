@@ -7,7 +7,7 @@ use time::OffsetDateTime;
 use crate::survey::{
     attrakdiff, format_date, net_promoter_score,
     system_usability_score::{self, Response2, Score},
-    Survey, Surveys,
+    FormatDateError, Survey, Surveys,
 };
 
 #[derive(thiserror::Error, Debug)]
@@ -17,21 +17,21 @@ pub(crate) struct CreateError(#[from] libsql::Error);
 #[derive(thiserror::Error, Debug)]
 pub(crate) enum InitializationError {
     #[error("Error creating databse: {0}")]
-    CreateError(#[from] CreateError),
+    Create(#[from] CreateError),
     #[error("Error connecting to database: {0}")]
-    ConnectionError(libsql::Error),
+    Connection(libsql::Error),
     #[error("Error executing create tables batch query: {0}")]
-    CreateTablesError(libsql::Error),
+    CreateTables(libsql::Error),
 }
 
 #[derive(thiserror::Error, Debug)]
 pub(crate) enum StatementError {
     #[error("Error connecting to database: {0}")]
-    ConnectionError(libsql::Error),
+    Connection(libsql::Error),
     #[error("Error preparing statement: {0}")]
-    PrepareError(libsql::Error),
+    Prepare(libsql::Error),
     #[error("Error exectuing statement: {0}")]
-    ExecuteError(libsql::Error),
+    Execute(libsql::Error),
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -45,11 +45,11 @@ pub(crate) enum SingleRowQueryError {
 #[derive(thiserror::Error, Debug)]
 pub(crate) enum MultiRowQueryError {
     #[error("Error running statement: {0}")]
-    StatementError(#[from] StatementError),
+    Statement(#[from] StatementError),
     #[error("Error getting next row: {0}")]
-    NextRowError(libsql::Error),
+    NextRow(libsql::Error),
     #[error("Error reading value from row: {0}")]
-    RowError(libsql::Error),
+    Row(libsql::Error),
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -60,6 +60,8 @@ pub(crate) enum GetUserSurveysError {
     DateError(#[from] time::error::ComponentRange),
     #[error("Error formatting date")]
     FormatError(#[from] time::error::Format),
+    #[error("Error formatting date for humans: {0}")]
+    HumanReadableDateError(#[from] FormatDateError),
     #[error("Encountered unexpected unsupported survey type: {0}")]
     UnsupportedSurveyType(Arc<str>),
 }
@@ -110,13 +112,13 @@ impl Database {
         let connection = database
             .0
             .connect()
-            .map_err(InitializationError::ConnectionError)?;
+            .map_err(InitializationError::Connection)?;
 
         let query = include_str!("./create_tables.sql");
         connection
             .execute_batch(query)
             .await
-            .map_err(InitializationError::CreateTablesError)?;
+            .map_err(InitializationError::CreateTables)?;
 
         tracing::debug!("Tables created");
 
@@ -124,7 +126,7 @@ impl Database {
     }
 
     async fn connect(&self) -> Result<libsql::Connection, StatementError> {
-        self.0.connect().map_err(StatementError::ConnectionError)
+        self.0.connect().map_err(StatementError::Connection)
     }
 
     async fn insert(
@@ -137,12 +139,12 @@ impl Database {
         let mut statement = connection
             .prepare(sql)
             .await
-            .map_err(StatementError::PrepareError)?;
+            .map_err(StatementError::Prepare)?;
 
         statement
             .execute(parameters)
             .await
-            .map_err(StatementError::ExecuteError)?;
+            .map_err(StatementError::Execute)?;
 
         Ok(())
     }
@@ -156,12 +158,12 @@ impl Database {
         let mut statement = connection
             .prepare(sql)
             .await
-            .map_err(StatementError::PrepareError)?;
+            .map_err(StatementError::Prepare)?;
 
         statement
             .query_row(parameters)
             .await
-            .map_err(StatementError::ExecuteError)
+            .map_err(StatementError::Execute)
     }
 
     async fn query(
@@ -173,12 +175,12 @@ impl Database {
         let mut statement = connection
             .prepare(sql)
             .await
-            .map_err(StatementError::PrepareError)?;
+            .map_err(StatementError::Prepare)?;
 
         statement
             .query(parameters)
             .await
-            .map_err(StatementError::ExecuteError)
+            .map_err(StatementError::Execute)
     }
 
     pub(crate) async fn insert_user(
@@ -219,7 +221,7 @@ impl Database {
         let mut statement = connection
             .prepare("SELECT user_id FROM google_account_connections WHERE google_user_id = :id")
             .await
-            .map_err(StatementError::PrepareError)?;
+            .map_err(StatementError::Prepare)?;
 
         let result = statement
             .query_row(named_params![":id": google_user_id])
@@ -382,7 +384,7 @@ impl Database {
         let mut statement = connection
             .prepare("SELECT name FROM attrakdiff_surveys WHERE id = :id AND user_id = :user_id")
             .await
-            .map_err(StatementError::PrepareError)?;
+            .map_err(StatementError::Prepare)?;
 
         let result = statement
             .query_row(named_params! {
@@ -411,16 +413,12 @@ impl Database {
 
         let mut responses = Vec::new();
 
-        while let Some(row) = rows
-            .next()
-            .await
-            .map_err(MultiRowQueryError::NextRowError)?
-        {
+        while let Some(row) = rows.next().await.map_err(MultiRowQueryError::NextRow)? {
             let mut response = [0; 28];
             for index in 3u8..31 {
                 let question_value = row
                     .get::<i32>(index.into())
-                    .map_err(MultiRowQueryError::RowError)?;
+                    .map_err(MultiRowQueryError::Row)?;
 
                 response[usize::from(index - 3)] = question_value;
             }
@@ -448,20 +446,16 @@ impl Database {
                 named_params![":user_id": user_id],
             )
             .await
-            .map_err(MultiRowQueryError::StatementError)?;
+            .map_err(MultiRowQueryError::Statement)?;
 
         let mut surveys = Surveys::default();
 
-        while let Some(row) = rows
-            .next()
-            .await
-            .map_err(MultiRowQueryError::NextRowError)?
-        {
+        while let Some(row) = rows.next().await.map_err(MultiRowQueryError::NextRow)? {
             //TOOO use row deserialize functionality
-            let survey_type = row.get_str(0).map_err(MultiRowQueryError::RowError)?;
-            let survey_id = row.get_str(1).map_err(MultiRowQueryError::RowError)?;
-            let survey_name = row.get_str(2).map_err(MultiRowQueryError::RowError)?;
-            let created_at_utc = row.get::<i64>(3).map_err(MultiRowQueryError::RowError)?;
+            let survey_type = row.get_str(0).map_err(MultiRowQueryError::Row)?;
+            let survey_id = row.get_str(1).map_err(MultiRowQueryError::Row)?;
+            let survey_name = row.get_str(2).map_err(MultiRowQueryError::Row)?;
+            let created_at_utc = row.get::<i64>(3).map_err(MultiRowQueryError::Row)?;
             let created_at_utc = OffsetDateTime::from_unix_timestamp(created_at_utc)?;
             // More information on the correct datetime format
             // - https://html.spec.whatwg.org/multipage/text-level-semantics.html#datetime-value
@@ -474,7 +468,7 @@ impl Database {
                 id: survey_id.into(),
                 name: survey_name.into(),
                 //TODO add user timezone offset
-                created_human_readable: format_date(created_at_utc),
+                created_human_readable: format_date(created_at_utc)?,
                 created_machine_readable: machine_formatted_date,
             };
 
@@ -514,9 +508,7 @@ impl Database {
 
         let row = match result {
             Ok(row) => row,
-            Err(StatementError::ExecuteError(libsql::Error::QueryReturnedNoRows)) => {
-                return Ok(None)
-            }
+            Err(StatementError::Execute(libsql::Error::QueryReturnedNoRows)) => return Ok(None),
             Err(error) => return Err(GetSurveyError::StatementError(error)),
         };
 
@@ -630,7 +622,7 @@ impl Database {
         let mut statement = connection
             .prepare("SELECT name FROM net_promoter_score_surveys WHERE user_id = :user_id AND id = :survey_id")
             .await
-            .map_err(StatementError::PrepareError)?;
+            .map_err(StatementError::Prepare)?;
 
         let result = statement
             .query_row(named_params! {
@@ -659,13 +651,9 @@ impl Database {
 
         let mut responses = Vec::new();
 
-        while let Some(row) = rows
-            .next()
-            .await
-            .map_err(MultiRowQueryError::NextRowError)?
-        {
-            let answer_1: i32 = row.get(3).map_err(MultiRowQueryError::RowError)?;
-            let answer_2: Option<String> = row.get(3).map_err(MultiRowQueryError::RowError)?;
+        while let Some(row) = rows.next().await.map_err(MultiRowQueryError::NextRow)? {
+            let answer_1: i32 = row.get(3).map_err(MultiRowQueryError::Row)?;
+            let answer_2: Option<String> = row.get(3).map_err(MultiRowQueryError::Row)?;
 
             responses.push((answer_1, answer_2));
         }
@@ -738,7 +726,7 @@ impl Database {
         let mut statement = connection
             .prepare("SELECT name FROM system_usability_score_surveys WHERE user_id = :user_id AND id = :survey_id")
             .await
-            .map_err(StatementError::PrepareError)?;
+            .map_err(StatementError::Prepare)?;
 
         let result = statement
             .query_row(named_params! {
@@ -768,17 +756,13 @@ impl Database {
         let mut responses = Vec::new();
         let mut scores = Vec::new();
 
-        while let Some(row) = rows
-            .next()
-            .await
-            .map_err(MultiRowQueryError::NextRowError)?
-        {
+        while let Some(row) = rows.next().await.map_err(MultiRowQueryError::NextRow)? {
             let mut user_scores = [0; 10];
             let mut score_sum = 0;
             for index in 3u8..13 {
                 let score = row
                     .get::<u32>(index.into())
-                    .map_err(MultiRowQueryError::RowError)?;
+                    .map_err(MultiRowQueryError::Row)?;
 
                 user_scores[usize::from(index - 3)] = score;
 
@@ -812,8 +796,9 @@ impl Database {
             let standard_deviation = (variance).sqrt();
             scores.sort_unstable();
             let median = scores[scores.len() / 2] as f64 / 100.0;
-            let min = scores.iter().min().copied().unwrap() as f64 / 100.0;
-            let max = scores.iter().max().copied().unwrap() as f64 / 100.0;
+
+            let min = scores.iter().min().copied().unwrap_or_default() as f64 / 100.0;
+            let max = scores.iter().max().copied().unwrap_or_default() as f64 / 100.0;
             Score {
                 mean: mean / 100.0,
                 variance: variance / 100.0,

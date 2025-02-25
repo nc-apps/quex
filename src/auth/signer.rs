@@ -26,7 +26,6 @@ impl Signer {
         let mut hmac: Hmac<Sha256> =
             Hmac::<Sha256>::new_from_slice(&self.key).expect("HMAC key should be 32 bytes");
         hmac.update(data);
-        
 
         hmac.finalize().into_bytes()
     }
@@ -72,9 +71,11 @@ impl AntiForgeryTokenProvider {
             return false;
         }
 
-        self.signer.is_valid(
-            &token_bytes[SIGNATURE_LENGTH..],
-            &token_bytes[..SIGNATURE_LENGTH].try_into().unwrap(),
-        )
+        let Ok(signature) = token_bytes[..SIGNATURE_LENGTH].try_into() else {
+            return false;
+        };
+
+        self.signer
+            .is_valid(&token_bytes[SIGNATURE_LENGTH..], &signature)
     }
 }

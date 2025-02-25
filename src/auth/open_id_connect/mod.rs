@@ -109,6 +109,8 @@ async fn validate_id_token(
 pub(in crate::auth) enum SignInWithGoogleError {
     #[error("Client credentials not configured")]
     NoClientCredentials,
+    #[error("Error parsing url: {0}")]
+    UrlParse(#[from] url::ParseError),
     #[error("Failed to get discovery document")]
     GetDiscoveryDocumentError(#[from] discovery::GetDocumentError),
     #[error("Failed to ensure url uses https")]
@@ -140,7 +142,7 @@ pub(in crate::auth) async fn get_sign_in_with_google_url<const SCOPES_LENGTH: us
         return Err(SignInWithGoogleError::NoClientCredentials);
     };
 
-    let url = Url::parse("https://accounts.google.com").unwrap();
+    let url = Url::parse("https://accounts.google.com")?;
 
     let mut authorization_endpoint = state
         .discovery_cache
