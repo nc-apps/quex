@@ -162,6 +162,7 @@ async fn main() -> Result<(), AppError> {
     // Build our application with a route
     let app = Router::new()
         .route("/", get(routes::index::get_index_page))
+        .route("/error", get(routes::error::get_error_page))
         .merge(auth_routes)
         .merge(survey_routes)
         // If the route could not be matched it might be a file
