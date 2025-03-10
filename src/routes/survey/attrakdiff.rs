@@ -5,7 +5,6 @@ use crate::AppState;
 use askama::Template;
 use askama_axum::IntoResponse;
 use axum::extract::{Path, State};
-use axum::http::{self};
 use axum::response::Redirect;
 use axum::Form;
 use nanoid::nanoid;
@@ -190,7 +189,7 @@ struct AttrakdiffResultsTemplate {
 impl IntoResponse for GetResultsPageError {
     fn into_response(self) -> askama_axum::Response {
         tracing::error!("Error getting results page: {}", self);
-        http::StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        Redirect::to("/error").into_response()
     }
 }
 

@@ -7,7 +7,7 @@ use authenticated_user::AuthenticatedUser;
 use axum::routing::post;
 use axum::{
     extract::{Query, State},
-    http::{self, Uri},
+    http::{Uri},
     response::Redirect,
     routing::get,
     Form, Router,
@@ -143,7 +143,7 @@ impl IntoResponse for CompleteSignInError {
             CompleteSignInError::Expired => Redirect::to("/signin").into_response(),
             other => {
                 tracing::error!("Error getting complete sign in page: {}", other);
-                http::StatusCode::INTERNAL_SERVER_ERROR.into_response()
+                Redirect::to("/error").into_response()
             }
         }
     }
@@ -227,7 +227,7 @@ enum CompleteSignUpError {
 impl IntoResponse for CompleteSignUpError {
     fn into_response(self) -> askama_axum::Response {
         tracing::error!("Error completing sign in: {}", self);
-        http::StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        Redirect::to("/error").into_response()
     }
 }
 

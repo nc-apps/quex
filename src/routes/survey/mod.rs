@@ -8,7 +8,7 @@ use axum::extract::{FromRequest, Path, Request, State};
 use axum::http::{HeaderMap, HeaderValue};
 use axum::response::{Redirect, Response};
 use axum::routing::{get, post};
-use axum::{http, Form, Router};
+use axum::{Form, Router};
 use reqwest::header::{self, InvalidHeaderValue};
 use serde::Deserialize;
 use std::fmt::Debug;
@@ -88,7 +88,7 @@ pub(crate) enum GetSurveysPageError {
 impl IntoResponse for GetSurveysPageError {
     fn into_response(self) -> Response {
         tracing::error!("Error getting surveys page: {:?}", self);
-        http::StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        Redirect::to("/error").into_response()
     }
 }
 
@@ -115,7 +115,7 @@ enum CreateResponseError {
 impl IntoResponse for CreateResponseError {
     fn into_response(self) -> Response {
         tracing::error!("Error creating response: {:?}", self);
-        http::StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        Redirect::to("/error").into_response()
     }
 }
 
@@ -180,7 +180,7 @@ enum GetSurveyError {
 impl IntoResponse for GetSurveyError {
     fn into_response(self) -> Response {
         tracing::error!("Error getting survey: {:?}", self);
-        http::StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        Redirect::to("/error").into_response()
     }
 }
 
@@ -230,7 +230,7 @@ pub(super) enum CreateSurveyError {
 impl IntoResponse for CreateSurveyError {
     fn into_response(self) -> askama_axum::Response {
         tracing::error!("Error creating survey: {}", self);
-        http::StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        Redirect::to("/error").into_response()
     }
 }
 
@@ -366,7 +366,7 @@ enum DownloadResultsError {
 impl IntoResponse for DownloadResultsError {
     fn into_response(self) -> askama_axum::Response {
         tracing::error!("Error downloading results: {}", self);
-        http::StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        Redirect::to("/error").into_response()
     }
 }
 

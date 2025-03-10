@@ -1,10 +1,7 @@
 use std::sync::Arc;
 
 use axum::response::{IntoResponse, Redirect};
-use axum::{
-    extract::{Query, State},
-    http,
-};
+use axum::extract::{Query, State};
 use axum_extra::extract::SignedCookieJar;
 use serde::{Deserialize, Serialize};
 use url::Url;
@@ -104,7 +101,7 @@ pub(in crate::auth) enum HandleAuthenticationResponseError {
 impl IntoResponse for HandleAuthenticationResponseError {
     fn into_response(self) -> askama_axum::Response {
         tracing::error!("Error handling authentication response: {}", self);
-        http::StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        Redirect::to("/error").into_response()
     }
 }
 
