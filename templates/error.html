@@ -1,0 +1,24 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}Sorry, something went wrong{% endblock %}
+
+{% block content %}
+
+<main class="content-center h-dvh justify-items-center">
+    <article>
+        <hgroup>
+            <h1 class="text-3xl font-bold">Sorry, something went wrong</h1>
+            <p>Something on our end went wrong</p>
+        </hgroup>
+
+        <a href="/"
+            class="flex mt-3 justify-center rounded-md bg-blue-600 px-3 py-1.5 text-sm font-semibold leading-6 text-white shadow-sm hover:bg-blue-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">
+            Go home
+        </a>
+    </article>
+
+</main>
+
+{% call super() %}
+
+{% endblock %}

@@ -40,6 +40,8 @@ pub(in crate::auth) enum DecodeTokenError {
         mininum_expected: usize,
         actual: usize,
     },
+    #[error("Bad slice length: {0}")]
+    BadSliceLength(#[from] core::array::TryFromSliceError),
     #[error("Bad timestamp: {0}")]
     BadTimestamp(#[from] time::error::ComponentRange),
     #[error("Bad token encoding: {0}")]
@@ -121,9 +123,12 @@ impl CompleteSignInToken {
                 // User id is minimum one byte long
                 mininum_expected: Self::MINIMUM_LENGTH,
                 actual: decoded.len(),
+            })
+            .and_then(|timestamp| {
+                <[u8; 8]>::try_from(timestamp).map_err(DecodeTokenError::BadSliceLength)
             })?;
 
-        let timestamp = i64::from_be_bytes(timestamp.try_into().expect("Expected 8 bytes"));
+        let timestamp = i64::from_be_bytes(timestamp);
         let issued_at = OffsetDateTime::from_unix_timestamp(timestamp)?;
 
         let user_id = decoded

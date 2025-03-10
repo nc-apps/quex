@@ -1,20 +1,23 @@
 use crate::auth::authenticated_user::AuthenticatedUser;
-use crate::AppState;
+use crate::database::{MultiRowQueryError, SingleRowQueryError, StatementError, SurveyType};
+use crate::{database, AppState};
 use askama::Template;
 use askama_axum::IntoResponse;
+use axum::extract::rejection::FormRejection;
 use axum::extract::{FromRequest, Path, Request, State};
+use axum::http::{HeaderMap, HeaderValue};
 use axum::response::{Redirect, Response};
 use axum::routing::{get, post};
 use axum::{Form, Router};
-use libsql::{named_params, Connection};
+use reqwest::header::{self, InvalidHeaderValue};
 use serde::Deserialize;
 use std::fmt::Debug;
 use std::sync::Arc;
 use time::OffsetDateTime;
 
-mod attrakdiff;
-mod net_promoter_score;
-mod system_usability_score;
+pub(crate) mod attrakdiff;
+pub(crate) mod net_promoter_score;
+pub(crate) mod system_usability_score;
 
 /// Creates a router for the surveys sub-routes.
 /// This enables us to only expose the router creation and don't need to expose the individual
@@ -54,19 +57,19 @@ pub(crate) fn create_router() -> Router<AppState> {
 }
 
 /// Represents a survey in the surveys overview page and list.
-struct Survey {
-    id: String,
-    name: String,
-    created_human_readable: String,
-    created_machine_readable: String,
+pub(crate) struct Survey {
+    pub(crate) id: Arc<str>,
+    pub(crate) name: Arc<str>,
+    pub(crate) created_human_readable: String,
+    pub(crate) created_machine_readable: String,
 }
 
 /// Contains vectors for each survey type with the survey ids
 #[derive(Default)]
-struct Surveys {
-    attrakdiff: Vec<Survey>,
-    net_promoter_score: Vec<Survey>,
-    system_usability_score: Vec<Survey>,
+pub(crate) struct Surveys {
+    pub(crate) attrakdiff: Vec<Survey>,
+    pub(crate) net_promoter_score: Vec<Survey>,
+    pub(crate) system_usability_score: Vec<Survey>,
 }
 
 /// The HTML template for the surveys overview page
@@ -76,294 +79,126 @@ struct SurveysTemplate {
     surveys: Surveys,
 }
 
+#[derive(thiserror::Error, Debug)]
+pub(crate) enum GetSurveysPageError {
+    #[error("Error reading surveys from database: {0}")]
+    DatabaseError(#[from] database::GetUserSurveysError),
+}
+
+impl IntoResponse for GetSurveysPageError {
+    fn into_response(self) -> Response {
+        tracing::error!("Error getting surveys page: {:?}", self);
+        Redirect::to("/error").into_response()
+    }
+}
+
 /// Handler for the surveys overview page. Loads all surveys for the user and displays them.
 async fn get_surveys_page(
+    State(state): State<AppState>,
     user: AuthenticatedUser,
-    State(app_state): State<AppState>,
-) -> Result<askama_axum::Response, Redirect> {
-    const GET_USER_SURVEYS_QUERY: &str = "SELECT type, id, name, created_at_utc FROM (
-                SELECT 'attrakdiff' as type, * FROM attrakdiff_surveys
-                UNION ALL
-                SELECT 'net promoter score' as type, * FROM net_promoter_score_surveys
-                UNION ALL
-                SELECT 'system usability score' as type, * FROM system_usability_score_surveys
-            )
-                WHERE user_id = :user_id";
-
-    let connection = app_state
-        .database
-        .connect()
-        .expect("Error connecting to database");
-
-    let result = connection
-        .query(GET_USER_SURVEYS_QUERY, named_params![":user_id": user.id])
-        .await;
-
-    let mut rows = match result {
-        Ok(rows) => rows,
-        Err(error) => {
-            tracing::error!("Error getting surveys: {:?}", error);
-            //TODO display user error message it's not their fault
-            return Err(Redirect::to("/surveys/error"));
-        }
-    };
-
-    let mut surveys = Surveys::default();
-
-    loop {
-        let result = rows.next().await;
-        match result {
-            Ok(Some(row)) => {
-                // Load type
-                let result: Result<String, libsql::Error> = row.get(0);
-                let survey_type = match result {
-                    Ok(survey_type) => survey_type,
-                    Err(error) => {
-                        tracing::error!("Error reading survey id: {:?}", error);
-                        //TODO display user error message it's not their fault
-                        return Err(Redirect::to("/surveys/error"));
-                    }
-                };
-
-                // Load id
-                let result: Result<String, libsql::Error> = row.get(1);
-                let id = match result {
-                    Ok(id) => id,
-                    Err(error) => {
-                        tracing::error!("Error reading survey id: {:?}", error);
-                        //TODO display user error message it's not their fault
-                        return Err(Redirect::to("/surveys/error"));
-                    }
-                };
-
-                // Load survey name
-                let result: Result<String, libsql::Error> = row.get(2);
-                let name = match result {
-                    Ok(name) => name,
-                    Err(error) => {
-                        tracing::error!("Error reading survey name: {:?}", error);
-                        //TODO display user error message it's not their fault
-                        return Err(Redirect::to("/surveys/error"));
-                    }
-                };
-
-                //TODO load created_at_utc to display date created to user
-                let result: Result<i64, libsql::Error> = row.get(3);
-                let created_at_utc = match result {
-                    Ok(created_at_utc) => created_at_utc,
-                    Err(error) => {
-                        tracing::error!("Error reading survey created_at_utc: {:?}", error);
-                        //TODO display user error message it's not their fault
-                        return Err(Redirect::to("/surveys/error"));
-                    }
-                };
-
-                let result = OffsetDateTime::from_unix_timestamp(created_at_utc);
-                let created_at_utc = match result {
-                    Ok(created_at_utc) => created_at_utc,
-                    Err(error) => {
-                        tracing::error!(
-                            "Error converting created_at_utc to OffsetDateTime: {:?}",
-                            error
-                        );
-                        //TODO display user error message it's not their fault
-                        return Err(Redirect::to("/surveys/error"));
-                    }
-                };
-
-                // More information on the correct datetime format
-                // - https://html.spec.whatwg.org/multipage/text-level-semantics.html#datetime-value
-                // - https://html.spec.whatwg.org/multipage/common-microsyntaxes.html#valid-local-date-and-time-string
-                // ISO 8601 format should be fine though 🥴
-                let machine_formatted_date = match created_at_utc
-                    .format(&time::format_description::well_known::Iso8601::DEFAULT)
-                {
-                    Ok(date) => date,
-                    Err(error) => {
-                        tracing::error!("Error formatting date: {:?}", error);
-                        //TODO display user error message it's not their fault
-                        return Err(Redirect::to("/surveys/error"));
-                    }
-                };
-
-                let survey = Survey {
-                    id,
-                    name,
-                    //TODO add user timezone offset
-                    created_human_readable: format_date(created_at_utc),
-                    created_machine_readable: machine_formatted_date,
-                };
-
-                match survey_type.as_str() {
-                    "attrakdiff" => surveys.attrakdiff.push(survey),
-                    "net promoter score" => surveys.net_promoter_score.push(survey),
-                    "system usability score" => surveys.system_usability_score.push(survey),
-                    other => {
-                        tracing::error!("Unexpected unknown survey type: {}", other);
-                        return Err(Redirect::to("/surveys/error"));
-                    }
-                }
-            }
-            // No more rows
-            Ok(None) => break,
-            Err(error) => {
-                tracing::error!("Error getting surveys: {:?}", error);
-                //TODO display user error message it's not their fault
-                return Err(Redirect::to("/surveys/error"));
-            }
-        }
-    }
-
+) -> Result<askama_axum::Response, GetSurveysPageError> {
+    let surveys = state.database.get_user_surveys(&user.id).await?;
     let surveys_template = SurveysTemplate { surveys };
     Ok(surveys_template.into_response())
 }
 
-/// SQL query to get a single survey from the database by id
-const GET_SURVEY_QUERY: &str = "SELECT * FROM (
-            SELECT 'attrakdiff' as type, * FROM attrakdiff_surveys
-            UNION ALL
-            SELECT 'net promoter score' as type, * FROM net_promoter_score_surveys
-            UNION ALL
-            SELECT 'system usability score' as type, * FROM system_usability_score_surveys
-        )
-            WHERE id = :survey_id";
-
-/// Survey type for a get/create surveys and create responses to a survey
-#[derive(Deserialize, Debug)]
-enum SurveyType {
-    #[serde(rename = "ad")]
-    Attrakdiff,
-    #[serde(rename = "nps")]
-    NetPromoterScore,
-    #[serde(rename = "sus")]
-    SystemUsabilityScore,
-}
-
 #[derive(thiserror::Error, Debug)]
-enum GetSurveyError {
-    #[error("Error reading survey from database")]
-    DatabaseError(#[from] libsql::Error),
-    #[error("Unexpected survey type: {0}")]
-    UnexpectedSurveyType(Arc<str>),
+enum CreateResponseError {
+    #[error("Error reading survey from database: {0}")]
+    GetData(#[from] database::GetSurveyError),
+    #[error("Error creating response: {0}")]
+    Insert(#[from] StatementError),
+    #[error("Error deserializing form values for survey type {0:?} response: {1}")]
+    Form(SurveyType, FormRejection),
 }
 
-/// Helper function to get a survey from the database
-async fn get_survey(
-    connection: &Connection,
-    survey_id: &str,
-) -> Result<Option<SurveyType>, GetSurveyError> {
-    //TODO possibly optimize this as we don't know the type of the survey from the path alone,
-    // but also want the path to be easy to enter for users and don't reveal information that could
-    // bias the responses like the survey type
-    // This is a hot path as respondents will use this
-    // Could maybe optimize this by filtering on each subquery but that needs to be measured first
-    // maybe with EXPLAIN SQLite query plan if you understand how that works
-
-    let mut rows = connection
-        .query(GET_SURVEY_QUERY, named_params![":survey_id": survey_id])
-        .await?;
-
-    let row = rows.next().await?;
-    let Some(row) = row else {
-        return Ok(None);
-    };
-    let survey_type = row.get::<String>(0)?;
-    match survey_type.as_str() {
-        "attrakdiff" => Ok(Some(SurveyType::Attrakdiff)),
-        "net promoter score" => Ok(Some(SurveyType::NetPromoterScore)),
-        "system usability score" => Ok(Some(SurveyType::SystemUsabilityScore)),
-        other => {
-            tracing::error!("Unexpected unknown survey type: {}", other);
-            Err(GetSurveyError::UnexpectedSurveyType(other.into()))
-        }
+impl IntoResponse for CreateResponseError {
+    fn into_response(self) -> Response {
+        tracing::error!("Error creating response: {:?}", self);
+        Redirect::to("/error").into_response()
     }
 }
 
 /// Handler for the public endpoint where respondents submit their responses
 async fn create_response(
     state: State<AppState>,
-    Path(survey_id): Path<String>,
+    Path(survey_id): Path<Arc<str>>,
     request: Request,
-) -> Result<Redirect, Response> {
-    // Get survey to check if it even exists
-    let connection = state
-        .database
-        .connect()
-        .expect("Error connecting to database");
-    //TODO optimize as get_survey_page and this is a hot path
-    let result = get_survey(&connection, &survey_id).await;
-    let survey = match result {
-        Ok(survey) => survey,
-        Err(error) => {
-            tracing::error!("Error getting survey: {:?}", error);
-            //TODO display user error message it's not their fault
-            return Err(Redirect::to("/surveys").into_response());
-        }
-    };
+) -> Result<Redirect, CreateResponseError> {
+    // Get survey type to check if it even exists
+    let survey = state.database.get_survey_type(&survey_id).await?;
 
     // Check if survey exists
-    let Some(survey) = survey else {
-        tracing::warn!("User submitted a response to a survey that doesn't exist");
-        // User submitted a response to a survey that doesn't exist
+    let Some(survey_type) = survey else {
+        tracing::warn!("User submitted a response to survey {survey_id} that doesn't exist");
+        // User submitted a response to a survey that doesn't exist meaning they opened an invalid survey before or are possibly acting maliciously
         // This doesn't happen normally but if it happens we say thanks anyway since they put in
         // the effort
         return Ok(Redirect::to("/thanks"));
     };
 
     // Forward survey to correct survey page response handler
-    // Wrote this very late. Might not be the best code
-    match survey {
+    match survey_type {
         SurveyType::Attrakdiff => {
             let form = Form::<attrakdiff::Response>::from_request(request, &state)
                 .await
-                .map_err(|error| error.into_response())?;
-            Ok(attrakdiff::create_response(state, form, survey_id).await)
+                .map_err(|error| CreateResponseError::Form(SurveyType::Attrakdiff, error))?;
+
+            attrakdiff::create_response(state, form, survey_id)
+                .await
+                .map_err(CreateResponseError::Insert)
         }
         SurveyType::NetPromoterScore => {
             let form = Form::<net_promoter_score::Response>::from_request(request, &state)
                 .await
-                .map_err(|error| error.into_response())?;
-            Ok(net_promoter_score::create_response(state, form, survey_id).await)
+                .map_err(|error| CreateResponseError::Form(SurveyType::NetPromoterScore, error))?;
+
+            net_promoter_score::create_response(state, form, survey_id)
+                .await
+                .map_err(CreateResponseError::Insert)
         }
         SurveyType::SystemUsabilityScore => {
-            let form = Form::<system_usability_score::CreateResponseRequest>::from_request(
-                request, &state,
-            )
-            .await
-            .map_err(|error| error.into_response())?;
-            Ok(system_usability_score::create_response(state, form, survey_id).await)
+            let form = Form::<system_usability_score::Response>::from_request(request, &state)
+                .await
+                .map_err(|error| {
+                    CreateResponseError::Form(SurveyType::SystemUsabilityScore, error)
+                })?;
+
+            system_usability_score::create_response(state, form, survey_id)
+                .await
+                .map_err(CreateResponseError::Insert)
         }
+    }
+}
+
+#[derive(thiserror::Error, Debug)]
+enum GetSurveyError {
+    #[error("Error getting survey: {0}")]
+    DatabaseError(#[from] database::GetSurveyError),
+}
+
+impl IntoResponse for GetSurveyError {
+    fn into_response(self) -> Response {
+        tracing::error!("Error getting survey: {:?}", self);
+        Redirect::to("/error").into_response()
     }
 }
 
 /// Handler to get the form page for a specific survey for respondents to submit their responses
 async fn get_survey_page(
     State(state): State<AppState>,
-    Path(survey_id): Path<String>,
-) -> Result<Response, Redirect> {
+    Path(survey_id): Path<Arc<str>>,
+) -> Result<Response, GetSurveyError> {
     // Get survey to check if it even exists
-    //TODO optimize as get_survey_page and this is a hot path
-    let connection = state
-        .database
-        .connect()
-        .expect("Error connecting to database");
-    let result = get_survey(&connection, &survey_id).await;
-    let survey = match result {
-        Ok(survey) => survey,
-        Err(error) => {
-            tracing::error!("Error getting survey: {:?}", error);
-            //TODO display user error message it's not their fault
-            return Err(Redirect::to("/surveys/error"));
-        }
-    };
+    let survey_type = state.database.get_survey_type(&survey_id).await?;
 
     // Check if survey exists
-    let Some(survey) = survey else {
+    let Some(survey_type) = survey_type else {
         // Survey not found
-        return Err(Redirect::to("/surveys/notfound"));
+        return Ok(Redirect::to("/surveys/notfound").into_response());
     };
 
-    Ok(match survey {
+    Ok(match survey_type {
         SurveyType::Attrakdiff => attrakdiff::get_page(survey_id),
         SurveyType::NetPromoterScore => net_promoter_score::get_page(survey_id),
         SurveyType::SystemUsabilityScore => system_usability_score::get_page(survey_id),
@@ -386,11 +221,24 @@ struct CreateSurveyRequest {
     r#type: SurveyType,
 }
 
+#[derive(thiserror::Error, Debug)]
+pub(super) enum CreateSurveyError {
+    #[error("Error creating survey: {0}")]
+    Database(#[from] StatementError),
+}
+
+impl IntoResponse for CreateSurveyError {
+    fn into_response(self) -> askama_axum::Response {
+        tracing::error!("Error creating survey: {}", self);
+        Redirect::to("/error").into_response()
+    }
+}
+
 async fn create_survey(
     state: State<AppState>,
     user: AuthenticatedUser,
     Form(request): Form<CreateSurveyRequest>,
-) -> Redirect {
+) -> Result<Redirect, CreateSurveyError> {
     match request.r#type {
         SurveyType::Attrakdiff => attrakdiff::create_new_survey(state, user, request.name).await,
         SurveyType::NetPromoterScore => {
@@ -410,7 +258,15 @@ async fn thanks() -> impl IntoResponse {
     ThanksTemplate {}.into_response()
 }
 
-fn format_date(date: OffsetDateTime) -> String {
+#[derive(thiserror::Error, Debug)]
+pub(crate) enum FormatDateError {
+    #[error("Error creating formatter: {0}")]
+    CreateFormatter(icu::datetime::DateTimeError),
+    #[error("Error formatting date: {0}")]
+    Format(icu::calendar::CalendarError),
+}
+
+pub(crate) fn format_date(date: OffsetDateTime) -> Result<String, FormatDateError> {
     // The icu example
     use icu::calendar::{DateTime, Gregorian};
     use icu::datetime::{options::length, DateTimeFormatterOptions, TypedDateTimeFormatter};
@@ -425,7 +281,7 @@ fn format_date(date: OffsetDateTime) -> String {
     // Can use DateFormatter alternatively to dynamically format date based on accept-language header (see icu crate examples)
     // This uses unicode locale identifiers which might not line up with accept language header but should 99% of the time
     let formatter = TypedDateTimeFormatter::<Gregorian>::try_new(&locale!("en-US").into(), options)
-        .expect("Failed to create TypedDateTimeFormatter instance.");
+        .map_err(FormatDateError::CreateFormatter)?;
 
     let date = DateTime::try_new_gregorian_datetime(
         date.year(),
@@ -435,12 +291,11 @@ fn format_date(date: OffsetDateTime) -> String {
         date.minute(),
         date.second(),
     )
-    .unwrap();
+    .map_err(FormatDateError::Format)?;
 
-    let formatted = formatter.format(&date);
+    // let formatted = formatter.format(&date);
 
-    let date_string = formatter.format_to_string(&date);
-    date_string
+    Ok(formatter.format_to_string(&date))
 }
 
 #[test]
@@ -461,7 +316,7 @@ fn format_date_test() {
 
     // You can work with a formatter that can select the calendar at runtime:
     let locale = Locale::from_str("en-u-ca-gregory").unwrap();
-    let dtf = DateTimeFormatter::try_new(&locale.into(), options.clone())
+    let dtf = DateTimeFormatter::try_new(&locale.into(), options)
         .expect("Failed to create DateTimeFormatter instance.");
 
     // Or one that selects a calendar at compile time:
@@ -472,8 +327,8 @@ fn format_date_test() {
     // prefer using ISO dates with DateTimeFormatter
     let date = typed_date.to_iso().to_any();
 
-    let formatted_date = dtf.format(&date).expect("Calendars should match");
-    let typed_formatted_date = typed_dtf.format(&typed_date);
+    let _formatted_date = dtf.format(&date).expect("Calendars should match");
+    let _typed_formatted_date = typed_dtf.format(&typed_date);
 
     let formatted_date_string = dtf.format_to_string(&date).expect("Calendars should match");
     let typed_formatted_date_string = typed_dtf.format_to_string(&typed_date);
@@ -486,4 +341,43 @@ pub(crate) fn get_file_name(survey_id: &str) -> String {
     // The survey id should be URL safe and ASCII only by default
     assert!(survey_id.is_ascii());
     format!("survey responses {}.csv", survey_id)
+}
+
+#[derive(thiserror::Error, Debug)]
+enum GetResultsPageError {
+    #[error("Error getting survey: {0}")]
+    GetSurveyError(SingleRowQueryError),
+    #[error("Error getting survey responses: {0}")]
+    GetSurveyResponsesError(MultiRowQueryError),
+}
+
+#[derive(thiserror::Error, Debug)]
+enum DownloadResultsError {
+    #[error("Error getting survey: {0}")]
+    GetSurveyError(#[from] SingleRowQueryError),
+
+    #[error("Error getting survey responses: {0}")]
+    GetSurveyResponsesError(#[from] MultiRowQueryError),
+
+    #[error("Invalid survey id characters for header value: {0}")]
+    InvalidSurveyId(#[from] InvalidHeaderValue),
+}
+
+impl IntoResponse for DownloadResultsError {
+    fn into_response(self) -> askama_axum::Response {
+        tracing::error!("Error downloading results: {}", self);
+        Redirect::to("/error").into_response()
+    }
+}
+
+fn create_csv_download_headers(survey_id: &str) -> Result<HeaderMap, InvalidHeaderValue> {
+    let mut headers = HeaderMap::new();
+    const TEXT_CSV: HeaderValue = HeaderValue::from_static("text/csv");
+    headers.insert(header::CONTENT_TYPE, TEXT_CSV);
+    // The survey id should be URL safe and ASCII only by default
+    let value = format!("attachment; filename=\"{}\"", get_file_name(survey_id));
+    let value = HeaderValue::try_from(value)?;
+    headers.insert(header::CONTENT_DISPOSITION, value);
+
+    Ok(headers)
 }

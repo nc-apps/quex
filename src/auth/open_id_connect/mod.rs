@@ -15,7 +15,7 @@ pub(crate) mod discovery;
 
 #[derive(thiserror::Error, Debug)]
 #[error("Failed to set scheme to https")]
-struct SetSchemeError;
+pub(crate) struct SetSchemeError;
 
 fn ensure_https(url: &mut Url) -> Result<(), SetSchemeError> {
     if url.scheme() != "https" {
@@ -33,6 +33,10 @@ enum GoogleIssuer {
     HttpsAccounts,
 }
 
+#[allow(
+    unused,
+    reason = "Kept for reference. Expected to be removed when compiled"
+)]
 #[derive(Deserialize, Debug)]
 struct Claims {
     #[serde(rename = "aud")]
@@ -58,7 +62,7 @@ struct Claims {
 }
 
 #[derive(thiserror::Error, Debug)]
-enum ValidateIdTokenError {
+pub(crate) enum ValidateIdTokenError {
     #[error("Failed to ensure url uses https: {0}")]
     EnsureHttpsError(#[from] SetSchemeError),
     #[error("Failed to send request for verification keys: {0}")]
@@ -86,7 +90,7 @@ async fn validate_id_token(
     let response = client.get(jwks_uri).send().await?.error_for_status()?;
     let jwks: JwkSet = response.json().await?;
 
-    let header = jsonwebtoken::decode_header(&id_token)?;
+    let header = jsonwebtoken::decode_header(id_token)?;
     let key_id = header.kid.ok_or(ValidateIdTokenError::NoKeyId)?;
     let key = jwks.find(&key_id).ok_or(ValidateIdTokenError::MissingKey)?;
 
@@ -105,6 +109,8 @@ async fn validate_id_token(
 pub(in crate::auth) enum SignInWithGoogleError {
     #[error("Client credentials not configured")]
     NoClientCredentials,
+    #[error("Error parsing url: {0}")]
+    UrlParse(#[from] url::ParseError),
     #[error("Failed to get discovery document")]
     GetDiscoveryDocumentError(#[from] discovery::GetDocumentError),
     #[error("Failed to ensure url uses https")]
@@ -117,7 +123,10 @@ pub(in crate::auth) enum SignInWithGoogleError {
     QueryError(#[from] serde_urlencoded::ser::Error),
 
     #[error("Failed creating anti-forgery token")]
-    CreateAntiforgeryTokenError(#[from] CreateAntiForgeryTokenError),
+    CreateAntiForgeryTokenError(#[from] CreateAntiForgeryTokenError),
+
+    #[error("Error creating nonce: {0}")]
+    CreateNonceError(#[from] getrandom::Error),
 }
 
 pub(in crate::auth) async fn get_sign_in_with_google_url<const SCOPES_LENGTH: usize>(
@@ -133,7 +142,7 @@ pub(in crate::auth) async fn get_sign_in_with_google_url<const SCOPES_LENGTH: us
         return Err(SignInWithGoogleError::NoClientCredentials);
     };
 
-    let url = Url::parse("https://accounts.google.com").unwrap();
+    let url = Url::parse("https://accounts.google.com")?;
 
     let mut authorization_endpoint = state
         .discovery_cache
@@ -147,17 +156,17 @@ pub(in crate::auth) async fn get_sign_in_with_google_url<const SCOPES_LENGTH: us
     let redirect_url = create_redirect_url(state.configuration.server_url.clone())?;
 
     // Create anti-forgery token
-    let antiforgery_token = state
+    let anti_forgery_token = state
         .anti_forgery_token_provider
         .create_anti_forgery_token()?;
 
     let request = AuthenticationRequest {
         client_id: client_id.as_ref(),
-        nonce: Nonce::new(),
+        nonce: Nonce::new()?,
         redirect_uri: redirect_url,
         response_type: ResponseType::Code,
         scopes,
-        state: antiforgery_token,
+        state: anti_forgery_token,
         include_granted_scopes: None,
         prompt: None,
     };

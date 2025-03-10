@@ -19,19 +19,19 @@ pub(crate) struct AuthenticatedUser {
 }
 
 #[derive(Error, Debug)]
-pub(crate) enum Error {
+pub(crate) enum CookieError {
     #[error("No cookie")]
-    NoCookie,
+    Missing,
     #[error(transparent)]
-    BadCookie(#[from] cookie::Error),
+    BadFormat(#[from] cookie::Error),
     #[error("Expired cookie")]
-    ExpiredCookie,
+    Expired,
 }
 
-impl IntoResponse for Error {
+impl IntoResponse for CookieError {
     fn into_response(self) -> Response {
         match self {
-            Error::NoCookie | Error::BadCookie(_) | Error::ExpiredCookie => {
+            CookieError::Missing | CookieError::BadFormat(_) | CookieError::Expired => {
                 StatusCode::UNAUTHORIZED.into_response()
             }
         }
@@ -44,7 +44,7 @@ where
     AppState: FromRef<S>,
     S: Send + Sync,
 {
-    type Rejection = Error;
+    type Rejection = CookieError;
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let app_state = AppState::from_ref(state);
@@ -54,7 +54,7 @@ where
         let Ok(headers) = HeaderMap::from_request_parts(parts, state).await;
         let jar = SignedCookieJar::from_headers(&headers, key);
 
-        let cookie = jar.get(cookie::NAME).ok_or(Error::NoCookie)?;
+        let cookie = jar.get(cookie::NAME).ok_or(CookieError::Missing)?;
 
         // Expires can be set by users.
         // So additional validation is required when not expired.
@@ -65,12 +65,12 @@ where
             .is_some_and(|datetime| OffsetDateTime::now_utc() > datetime);
 
         if is_expired {
-            return Err(Error::ExpiredCookie);
+            return Err(CookieError::Expired);
         }
 
         let session = cookie::Session::try_from(cookie)?;
         if session.is_expired() {
-            return Err(Error::ExpiredCookie);
+            return Err(CookieError::Expired);
         }
 
         Ok(AuthenticatedUser {

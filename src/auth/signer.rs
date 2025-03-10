@@ -22,18 +22,20 @@ impl Signer {
         Self { key }
     }
 
-    pub(crate) fn sign(&self, data: &[u8]) -> impl AsRef<[u8]> {
-        let mut hmac: Hmac<Sha256> =
-            Hmac::<Sha256>::new_from_slice(&self.key).expect("HMAC key should be 32 bytes");
-        hmac.update(data);
-        let result = hmac.finalize().into_bytes();
+    fn get_hmac(&self) -> Hmac<Sha256> {
+        #[allow(clippy::expect_used, reason = "The key is guaranteed to be 32 bytes")]
+        Hmac::<Sha256>::new_from_slice(&self.key).expect("HMAC key should be 32 bytes")
+    }
 
-        result
+    pub(crate) fn sign(&self, data: &[u8]) -> impl AsRef<[u8]> {
+        let mut hmac: Hmac<Sha256> = self.get_hmac();
+        hmac.update(data);
+
+        hmac.finalize().into_bytes()
     }
 
     pub(crate) fn is_valid(&self, data: &[u8], signature: &[u8; 32]) -> bool {
-        let mut hmac: Hmac<Sha256> =
-            Hmac::<Sha256>::new_from_slice(&self.key).expect("HMAC key should be 32 bytes");
+        let mut hmac: Hmac<Sha256> = self.get_hmac();
 
         hmac.update(data);
         hmac.verify_slice(signature).is_ok()
@@ -56,13 +58,13 @@ impl AntiForgeryTokenProvider {
     ) -> Result<AntiForgeryToken, CreateAntiForgeryTokenError> {
         let mut token = [0; TOKEN_LENGTH];
 
-        let mut unique = &mut token[SIGNATURE_LENGTH..];
-        getrandom::getrandom(&mut unique)?;
-        let signature = self.signer.sign(&unique);
+        let unique = &mut token[SIGNATURE_LENGTH..];
+        getrandom::getrandom(unique)?;
+        let signature = self.signer.sign(unique);
 
         token[..SIGNATURE_LENGTH].copy_from_slice(signature.as_ref());
 
-        Ok(AntiForgeryToken(BASE64_URL_SAFE_NO_PAD.encode(&token)))
+        Ok(AntiForgeryToken(BASE64_URL_SAFE_NO_PAD.encode(token)))
     }
 
     pub(super) fn is_token_valid(&self, AntiForgeryToken(token): &AntiForgeryToken) -> bool {
@@ -72,9 +74,26 @@ impl AntiForgeryTokenProvider {
             return false;
         }
 
-        self.signer.is_valid(
-            &token_bytes[SIGNATURE_LENGTH..],
-            &token_bytes[..SIGNATURE_LENGTH].try_into().unwrap(),
-        )
+        let Ok(signature) = token_bytes[..SIGNATURE_LENGTH].try_into() else {
+            return false;
+        };
+
+        self.signer
+            .is_valid(&token_bytes[SIGNATURE_LENGTH..], &signature)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_anti_forgery_token() {
+        let signer = Signer::new([0; 32]);
+        assert_eq!(signer.key.len(), 32);
+        let provider = AntiForgeryTokenProvider::new(signer);
+
+        let token = provider.create_anti_forgery_token().unwrap();
+        assert!(provider.is_token_valid(&token));
     }
 }

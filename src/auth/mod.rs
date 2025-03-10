@@ -1,12 +1,13 @@
 use std::sync::Arc;
 
+use crate::database::StatementError;
 use crate::AppState;
 use askama_axum::{IntoResponse, Template};
 use authenticated_user::AuthenticatedUser;
 use axum::routing::post;
 use axum::{
     extract::{Query, State},
-    http::{self, Uri},
+    http::{Uri},
     response::Redirect,
     routing::get,
     Form, Router,
@@ -14,7 +15,6 @@ use axum::{
 use axum_extra::extract::SignedCookieJar;
 use base64::{prelude::BASE64_URL_SAFE_NO_PAD, Engine};
 use getrandom::getrandom;
-use libsql::named_params;
 use nanoid::nanoid;
 use open_id_connect::{authentication_response, get_sign_in_with_google_url};
 use serde::{Deserialize, Serialize};
@@ -79,12 +79,12 @@ impl<const N: usize> Serialize for Scopes<'_, N> {
 #[derive(Serialize, Debug)]
 struct Nonce(String);
 impl Nonce {
-    fn new() -> Self {
+    fn new() -> Result<Self, getrandom::Error> {
         // Length is arbitrary there seems to be no requirement
         let mut nonce = [0; 30];
-        getrandom(&mut nonce).unwrap();
-        let nonce = BASE64_URL_SAFE_NO_PAD.encode(&nonce);
-        Self(nonce)
+        getrandom(&mut nonce)?;
+        let nonce = BASE64_URL_SAFE_NO_PAD.encode(nonce);
+        Ok(Self(nonce))
     }
 }
 
@@ -94,6 +94,10 @@ enum ResponseType {
     Code,
 }
 
+#[allow(
+    unused,
+    reason = "Kept for reference. Expected to be removed when compiled"
+)]
 #[derive(Serialize, Debug)]
 #[serde(rename_all = "snake_case")]
 enum Prompt {
@@ -139,7 +143,7 @@ impl IntoResponse for CompleteSignInError {
             CompleteSignInError::Expired => Redirect::to("/signin").into_response(),
             other => {
                 tracing::error!("Error getting complete sign in page: {}", other);
-                http::StatusCode::INTERNAL_SERVER_ERROR.into_response()
+                Redirect::to("/error").into_response()
             }
         }
     }
@@ -212,6 +216,10 @@ enum CompleteSignUpError {
     DecodeError(#[from] DecodeTokenError),
     #[error("Signin token is expired")]
     Expired,
+    #[error("Error inserting user: {0}")]
+    InsertUserError(StatementError),
+    #[error("Error inserting google account connection: {0}")]
+    InsertGoogleAccountConnectionError(StatementError),
     #[error("Error creating cookie: {0}")]
     CreateCookieError(#[from] postcard::Error),
 }
@@ -219,7 +227,7 @@ enum CompleteSignUpError {
 impl IntoResponse for CompleteSignUpError {
     fn into_response(self) -> askama_axum::Response {
         tracing::error!("Error completing sign in: {}", self);
-        http::StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        Redirect::to("/error").into_response()
     }
 }
 
@@ -235,28 +243,17 @@ async fn complete_signup(
     }
 
     let user_id = nanoid!();
-    let connection = state.database.connect()?;
-    connection
-        .execute(
-            "INSERT INTO users (id, name) VALUES (:id, :name)",
-            named_params![
-                ":id": user_id.clone(),
-                ":name": request.name,
-            ],
-        )
+    state
+        .database
+        .insert_user(&user_id, &request.name)
         .await
-        .unwrap();
+        .map_err(CompleteSignUpError::InsertUserError)?;
 
-    connection
-        .execute(
-            "INSERT INTO google_account_connections (user_id, google_user_id) VALUES (:user_id, :google_user_id)",
-            named_params![
-                ":user_id": user_id.clone(),
-                ":google_user_id": token.user_id,
-            ],
-        )
+    state
+        .database
+        .insert_google_account_connection(&user_id, &token.user_id)
         .await
-        .unwrap();
+        .map_err(CompleteSignUpError::InsertGoogleAccountConnectionError)?;
 
     let cookie = cookie::create(user_id.into())?;
 

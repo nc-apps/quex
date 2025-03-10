@@ -22,10 +22,10 @@ pub(super) enum ErrorType {
 }
 
 #[derive(Debug, Clone, Copy)]
-enum Secret {
-    CookieSigningSecret,
+pub(crate) enum Secret {
+    CookieSigning,
     LibSqlAuthToken,
-    GoogleClientSecret,
+    GoogleClient,
     AntiForgeryTokenSigningKey,
     GoogleIdSigningKey,
 }
@@ -33,9 +33,9 @@ enum Secret {
 impl Secret {
     const fn get_variable(&self) -> &'static str {
         match self {
-            Secret::CookieSigningSecret => "COOKIE_SIGNING_SECRET_ID",
+            Secret::CookieSigning => "COOKIE_SIGNING_SECRET_ID",
             Secret::LibSqlAuthToken => "LIBSQL_AUTH_TOKEN_ID",
-            Secret::GoogleClientSecret => "GOOGLE_CLIENT_SECRET_ID",
+            Secret::GoogleClient => "GOOGLE_CLIENT_SECRET_ID",
             Secret::AntiForgeryTokenSigningKey => "ANTI_FORGERY_SIGNING_SECRET_ID",
             Secret::GoogleIdSigningKey => "GOOGLE_ID_SIGNING_SECRET_ID",
         }
@@ -53,13 +53,13 @@ pub(super) struct LoadSecretIdError {
 #[derive(Error, Debug)]
 pub(super) enum Error {
     #[error("Failed to load token from environment variables: {0}")]
-    LoadTokenError(#[source] env::VarError),
+    LoadToken(#[source] env::VarError),
     #[error("Error getting secrets from Bitwarden Secrets Manager")]
-    BwsError(#[from] bitwarden::Error),
+    Bws(#[from] bitwarden::Error),
     #[error("Error authenticating with Bitwarden")]
     BwsAuthenticationFailed,
     #[error("Error loading secret id from environment variables: {0}")]
-    LoadSecretIdError(#[from] LoadSecretIdError),
+    LoadSecretId(#[from] LoadSecretIdError),
     #[error("Secret not provided by Bitwarden: {0:?}")]
     SecretNotProvided(Secret),
 }
@@ -75,9 +75,9 @@ pub(crate) struct Secrets {
 
 fn load_secret_ids() -> Result<HashMap<Uuid, Secret>, LoadSecretIdError> {
     const SECRETS: &[Secret] = &[
-        Secret::CookieSigningSecret,
+        Secret::CookieSigning,
         Secret::LibSqlAuthToken,
-        Secret::GoogleClientSecret,
+        Secret::GoogleClient,
         Secret::AntiForgeryTokenSigningKey,
         Secret::GoogleIdSigningKey,
     ];
@@ -105,7 +105,7 @@ pub(super) async fn setup() -> Result<Secrets, Error> {
     let client = Client::new(None);
 
     let request = AccessTokenLoginRequest {
-        access_token: env::var("BWS_TOKEN").map_err(Error::LoadTokenError)?,
+        access_token: env::var("BWS_TOKEN").map_err(Error::LoadToken)?,
         state_file: None,
     };
 
@@ -137,9 +137,9 @@ pub(super) async fn setup() -> Result<Secrets, Error> {
         };
 
         match variable {
-            Secret::CookieSigningSecret => cookie_signing_secret = Some(secret.value),
+            Secret::CookieSigning => cookie_signing_secret = Some(secret.value),
             Secret::LibSqlAuthToken => lib_sql_auth_token = Some(secret.value),
-            Secret::GoogleClientSecret => google_client_secret = Some(secret.value),
+            Secret::GoogleClient => google_client_secret = Some(secret.value),
             Secret::AntiForgeryTokenSigningKey => {
                 anti_forgery_token_signing_key = Some(secret.value)
             }
@@ -148,14 +148,14 @@ pub(super) async fn setup() -> Result<Secrets, Error> {
     }
 
     let cookie_signing_secret = cookie_signing_secret
-        .ok_or_else(|| Error::SecretNotProvided(Secret::CookieSigningSecret))?
+        .ok_or_else(|| Error::SecretNotProvided(Secret::CookieSigning))?
         .into();
 
     let lib_sql_auth_token =
         lib_sql_auth_token.ok_or_else(|| Error::SecretNotProvided(Secret::LibSqlAuthToken))?;
 
     let google_client_secret = google_client_secret
-        .ok_or_else(|| Error::SecretNotProvided(Secret::GoogleClientSecret))?
+        .ok_or_else(|| Error::SecretNotProvided(Secret::GoogleClient))?
         .into();
 
     let anti_forgery_token_signing_key = anti_forgery_token_signing_key

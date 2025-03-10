@@ -11,3 +11,4 @@ Run `npm run tailwindcss` to generate the styles.css file.
 
 - Downloading NPS CSV might result in an empty file
 - The view button screen might be hidden on small screens
+- Survey time is not displayed in the users time zone

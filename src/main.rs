@@ -1,3 +1,9 @@
+#![deny(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Use more specific error handling. If there is an exception to this rule, opt out with a code comment"
+)]
+
 use std::sync::Arc;
 use std::{env, net::Ipv4Addr};
 
@@ -9,8 +15,8 @@ use axum::http::uri::InvalidUri;
 use axum::{http::Uri, routing::get, Router};
 use base64::prelude::BASE64_URL_SAFE_NO_PAD;
 use base64::Engine;
+use database::Database;
 use dotenvy::dotenv;
-use libsql::Database;
 use tokio::signal;
 use tower_http::services::ServeDir;
 use tracing_subscriber::layer::SubscriberExt;
@@ -23,8 +29,6 @@ mod secret;
 
 #[derive(thiserror::Error, Debug)]
 enum SigningSecretError {
-    #[error("Error reading signing secret")]
-    ReadError(env::VarError),
     #[error("Error decoding signing secret")]
     DecodeError(base64::DecodeError),
     #[error("Signing secret is not {expected_length} bytes long")]
@@ -67,13 +71,10 @@ enum AppError {
 
     #[error("Error reading google client id")]
     ReadClientIdError(env::VarError),
-    #[error("Error reading google client secret")]
-    ReadClientSecretError(env::VarError),
     #[error("Error reading Turso database url")]
     ReadDatabaseUrlError(env::VarError),
-
-    #[error("Either google client id or secret is missing")]
-    MissingClientIdOrSecret,
+    #[error("Error initializing database: {0}")]
+    DatabaseInitializationError(#[from] database::InitializationError),
 
     #[error("Error reading anti forgery token signing secret")]
     AntiForgerySecretError(SigningSecretError),
@@ -81,11 +82,14 @@ enum AppError {
     GoogleUserIdSigningSecretError(SigningSecretError),
     #[error("Error reading cookie signing secret")]
     CookieSigningSecretError(SigningSecretError),
-    #[error("Error creating cookie key")]
-    CreateCookieKeyError,
 
     #[error("Error setting up secrets")]
     SecretError(#[from] secret::Error),
+
+    #[error("Error binding port: {0}")]
+    BindError(std::io::Error),
+    #[error("Error serving app: {0}")]
+    ServeError(std::io::Error),
 }
 
 #[tokio::main]
@@ -105,7 +109,7 @@ async fn main() -> Result<(), AppError> {
     let url = std::env::var("TURSO_DATABASE_URL").map_err(AppError::ReadDatabaseUrlError)?;
 
     // Set up database
-    let database = database::initialize_database(url, secrets.lib_sql_auth_token).await;
+    let database = Database::initialize(url, secrets.lib_sql_auth_token).await?;
 
     // Configuration
     //TODO implement fallback to localhost
@@ -158,6 +162,7 @@ async fn main() -> Result<(), AppError> {
     // Build our application with a route
     let app = Router::new()
         .route("/", get(routes::index::get_index_page))
+        .route("/error", get(routes::error::get_error_page))
         .merge(auth_routes)
         .merge(survey_routes)
         // If the route could not be matched it might be a file
@@ -173,15 +178,15 @@ async fn main() -> Result<(), AppError> {
     // Run the server
     let listener = tokio::net::TcpListener::bind((address, 3000))
         .await
-        .unwrap();
+        .map_err(AppError::BindError)?;
 
-    tracing::debug!("listening on http://{}", listener.local_addr().unwrap());
+    if let Ok(address) = listener.local_addr() {
+        tracing::debug!("listening on http://{}", address);
+    }
     axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal())
         .await
-        .unwrap();
-
-    Ok(())
+        .map_err(AppError::ServeError)
 }
 
 #[derive(Clone)]
@@ -210,26 +215,45 @@ pub(crate) struct AppState {
     pub(crate) cookie_key: cookie::Key,
 }
 
+#[derive(thiserror::Error, Debug)]
+enum GracefulShutdownError {
+    #[error("Failed to install Ctrl-C handler: {0}")]
+    FailedCtrlCHandlerInstall(std::io::Error),
+    #[cfg(unix)]
+    #[error("Failed to install terminate signal handler: {0}")]
+    FailedTerminateHandlerInstall(std::io::Error),
+}
+
 async fn shutdown_signal() {
     let ctrl_c = async {
         signal::ctrl_c()
             .await
-            .expect("failed to install Ctrl+C handler");
+            .map_err(GracefulShutdownError::FailedCtrlCHandlerInstall)
     };
 
     #[cfg(unix)]
-    let terminate = async {
+    async fn wait_for_terminate() -> Result<(), GracefulShutdownError> {
         signal::unix::signal(signal::unix::SignalKind::terminate())
-            .expect("failed to install signal handler")
+            .map_err(GracefulShutdownError::FailedTerminateHandlerInstall)?
             .recv()
             .await;
-    };
+
+        Ok(())
+    }
 
     #[cfg(not(unix))]
     let terminate = std::future::pending::<()>();
 
-    tokio::select! {
-        _ = ctrl_c => {},
-        _ = terminate => {},
+    let error = tokio::select! {
+        result = ctrl_c => {
+            result
+        },
+        result = wait_for_terminate() => {
+            result
+        },
+    };
+
+    if let Err(error) = error {
+        tracing::error!("Error with shutdown signals: {}", error);
     }
 }

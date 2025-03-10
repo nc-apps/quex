@@ -1,4 +1,5 @@
 use crate::auth::authenticated_user::AuthenticatedUser;
+use crate::database::StatementError;
 use crate::routes::create_share_link;
 use crate::AppState;
 use askama::Template;
@@ -6,63 +7,51 @@ use askama_axum::IntoResponse;
 use axum::extract::{Path, State};
 use axum::response::Redirect;
 use axum::Form;
-use libsql::named_params;
 use nanoid::nanoid;
 use reqwest::StatusCode;
 use serde::Deserialize;
 use std::sync::Arc;
 use time::OffsetDateTime;
 
+use super::{
+    create_csv_download_headers, CreateSurveyError, DownloadResultsError, GetResultsPageError,
+};
+
 #[derive(Template)]
 #[template(path = "surveys/responses/net promoter score.html")]
 struct NpsTemplate {
-    id: String,
+    id: Arc<str>,
 }
 
-pub(super) fn get_page(id: String) -> askama_axum::Response {
+pub(super) fn get_page(id: Arc<str>) -> askama_axum::Response {
     let nps_template = NpsTemplate { id };
 
     nps_template.into_response()
 }
 
 #[derive(Deserialize, Debug)]
-pub(super) struct Response {
+pub(crate) struct Response {
     #[serde(rename = "Q1")]
-    q1: u8,
+    pub(crate) q1: u8,
     #[serde(rename = "Q2")]
-    q2: Option<String>,
+    pub(crate) q2: Option<String>,
 }
 
 pub(super) async fn create_response(
-    State(app_state): State<AppState>,
-    Form(nps_answers): Form<Response>,
-    survey_id: String,
-) -> Redirect {
-    tracing::debug!("Answers for NPS: {:?}", nps_answers);
+    State(state): State<AppState>,
+    Form(response): Form<Response>,
+    survey_id: Arc<str>,
+) -> Result<Redirect, StatementError> {
+    tracing::debug!("Answers for NPS: {:?}", response);
     let response_id = nanoid!();
     let now = OffsetDateTime::now_utc().unix_timestamp();
-    let connection = app_state
+
+    state
         .database
-        .connect()
-        .expect("Error connecting to database");
+        .insert_net_promoter_score_response(&response_id, &survey_id, now, response)
+        .await?;
 
-    connection
-        .execute(
-            "INSERT INTO net_promoter_score_responses (id, survey_id, created_at_utc , answer_1, answer_2) VALUES (:id, :survey_id, :created_at_utc, :answer_1, :answer_2)",
-            libsql::named_params! {
-                ":id": response_id,
-                ":survey_id": survey_id,
-                ":created_at_utc": now,
-                ":answer_1": nps_answers.q1,
-                ":answer_2": nps_answers.q2,
-            },
-        )
-        .await
-        .expect("Failed to insert into database");
-
-    tracing::debug!("Inserted into database");
-
-    Redirect::to("/thanks")
+    Ok(Redirect::to("/thanks"))
 }
 
 /// Handler that creates a new Net Promoter Score survey from a create survey form submission
@@ -70,7 +59,7 @@ pub(super) async fn create_new_survey(
     State(state): State<AppState>,
     user: AuthenticatedUser,
     name: Option<String>,
-) -> Redirect {
+) -> Result<Redirect, CreateSurveyError> {
     let survey_id = nanoid!();
 
     let name: Arc<str> = match name.as_deref() {
@@ -84,42 +73,13 @@ pub(super) async fn create_new_survey(
     // case something goes wrong
     let now = OffsetDateTime::now_utc().unix_timestamp();
 
-    let connection = state
+    state
         .database
-        .connect()
-        .expect("Error connecting to database");
-
-    let result = connection
-        .execute(
-            "INSERT INTO net_promoter_score_surveys (\
-                id,\
-                user_id,\
-                name,\
-                created_at_utc\
-                ) \
-                VALUES (\
-                    :id,\
-                    :user_id,\
-                    :name,\
-                    :created_at_utc\
-                )",
-            named_params! {
-                ":id":survey_id.clone(),
-                ":user_id":user.id,
-                ":name":name,
-                ":created_at_utc":now
-            },
-        )
-        .await;
-
-    if let Err(error) = result {
-        tracing::error!("Error creating new survey: {:?}", error);
-        //TODO: inform user creation has failed and it's not their fault
-        return Redirect::to("/");
-    }
+        .insert_net_promoter_score_survey(&survey_id, &user.id, &name, now)
+        .await?;
 
     // Redirect to newly created survey overview
-    Redirect::to(format!("/surveys/nps/{}", survey_id).as_ref())
+    Ok(Redirect::to(format!("/surveys/nps/{}", survey_id).as_ref()))
 }
 
 //TODO consider renaming to evaluation or something more fitting
@@ -127,8 +87,8 @@ pub(super) async fn create_new_survey(
 #[derive(Template)]
 #[template(path = "surveys/results/net promoter score.html")]
 struct NetPromoterScoreResultsTemplate {
-    id: String,
-    name: String,
+    id: Arc<str>,
+    name: Arc<str>,
     answers: Vec<(i32, Option<String>)>,
     survey_url: String,
 }
@@ -136,197 +96,71 @@ struct NetPromoterScoreResultsTemplate {
 /// Gets the details page that displays the results of the survey and gives insights to the responses
 pub(super) async fn get_results_page(
     State(state): State<AppState>,
-    Path(survey_id): Path<String>,
+    Path(survey_id): Path<Arc<str>>,
     user: AuthenticatedUser,
-) -> impl IntoResponse {
-    let connection = state
+) -> Result<impl IntoResponse, GetResultsPageError> {
+    let survey_name = state
         .database
-        .connect()
-        .expect("Error connecting to database");
+        .get_net_promoter_score_survey_name(&survey_id, &user.id)
+        .await
+        .map_err(GetResultsPageError::GetSurveyError)?;
 
-    let result = connection
-        .query(
-            "SELECT name FROM net_promoter_score_surveys WHERE user_id = :user_id AND id = :survey_id",
-            named_params![":user_id": user.id, ":survey_id": survey_id.clone()],
-        )
-        .await;
-
-    let mut rows = match result {
-        Ok(rows) => rows,
-        Err(error) => {
-            tracing::error!("Error querying for Net Promoter Score survey: {:?}", error);
-            //TODO display user error message it's not their fault
-            return Redirect::to("/surveys").into_response();
-        }
-    };
-
-    let result = rows.next().await;
-    //TODO put data we want to display into template
-    let row = match result {
-        Ok(Some(row)) => row,
-        // Survey not found. It wasn't created (yet), or deleted
-        //TODO display user error message
-        Ok(None) => return Redirect::to("/surveys").into_response(),
-        Err(error) => {
-            tracing::error!("Error reading query result: {:?}", error);
-            //TODO display user error message it's not their fault
-            return Redirect::to("/surveys").into_response();
-        }
-    };
-
-    let survey_name_result = row.get::<String>(0);
-    let name = match survey_name_result {
-        Ok(name) => name,
-        Err(error) => {
-            tracing::error!("Error reading survey name: {:?}", error);
-            //TODO display user error message it's not their fault
-            return Redirect::to("/surveys").into_response();
-        }
+    let Some(survey_name) = survey_name else {
+        return Ok(StatusCode::NOT_FOUND.into_response());
     };
 
     // Read results
-    let connection = state
+    let responses = state
         .database
-        .connect()
-        .expect("Error connecting to database");
-    let result = connection
-        .query(
-            "SELECT * FROM net_promoter_score_responses WHERE survey_id = :survey_id",
-            named_params![":survey_id": survey_id.clone()],
-        )
-        .await;
-
-    let mut rows = match result {
-        Ok(rows) => rows,
-        Err(error) => {
-            tracing::error!(
-                "Error querying for Net Promoter Score responses: {:?}",
-                error
-            );
-            //TODO display user error message it's not their fault
-            return Redirect::to("/surveys").into_response();
-        }
-    };
-
-    let mut answers: Vec<(i32, Option<String>)> = Vec::new();
-
-    loop {
-        let result = rows.next().await;
-        match result {
-            Ok(Some(row)) => {
-                let answer_1 = row.get::<i32>(3);
-                let answer_1 = match answer_1 {
-                    Ok(answer_1) => answer_1,
-                    Err(error) => {
-                        tracing::error!(
-                            "Error reading net promoter score response value answer 1: {:?}",
-                            error
-                        );
-                        //TODO display user error message it's not their fault
-                        return Redirect::to("/surveys").into_response();
-                    }
-                };
-
-                let answer_2 = row.get::<Option<String>>(4);
-                let answer_2 = match answer_2 {
-                    Ok(answer_2) => answer_2,
-                    Err(error) => {
-                        tracing::error!(
-                            "Error reading optional net promoter score response comment: {:?}",
-                            error
-                        );
-                        //TODO display user error message it's not their fault
-                        return Redirect::to("/surveys").into_response();
-                    }
-                };
-
-                answers.push((answer_1, answer_2));
-            }
-            Ok(None) => break,
-            Err(error) => {
-                tracing::error!("Error reading query result: {:?}", error);
-                //TODO display user error message it's not their fault
-                return Redirect::to("/surveys").into_response();
-            }
-        }
-    }
+        .get_net_promoter_score_survey_responses(&survey_id)
+        .await
+        .map_err(GetResultsPageError::GetSurveyResponsesError)?;
 
     let survey_url = create_share_link(&state.configuration.server_url, &survey_id);
-    NetPromoterScoreResultsTemplate {
+    Ok(NetPromoterScoreResultsTemplate {
         id: survey_id,
-        name,
-        answers,
+        name: survey_name,
+        answers: responses,
         survey_url,
     }
-    .into_response()
+    .into_response())
 }
 
 pub(super) async fn download_results(
     State(state): State<AppState>,
     Path(survey_id): Path<String>,
-) -> Result<String, StatusCode> {
-    let connection = state
+    user: AuthenticatedUser,
+) -> Result<impl IntoResponse, DownloadResultsError> {
+    // This also checks if the user has access to the survey
+    let survey_name = state
         .database
-        .connect()
-        .expect("Error connecting to database");
-    let result = connection
-        .query(
-            "SELECT * FROM net_promoter_score_responses WHERE survey_id = :survey_id",
-            named_params![":survey_id": survey_id.clone()],
-        )
-        .await;
+        .get_net_promoter_score_survey_name(&survey_id, &user.id)
+        .await
+        .map_err(DownloadResultsError::GetSurveyError)?;
 
-    let mut rows = match result {
-        Ok(rows) => rows,
-        Err(error) => {
-            tracing::error!("Error querying for Net Promoter Score survey: {:?}", error);
-            return Err(StatusCode::INTERNAL_SERVER_ERROR);
-        }
-    };
+    if survey_name.is_none() {
+        return Ok(StatusCode::NOT_FOUND.into_response());
+    }
+
+    //TODO check if this file can be streamed line by line and row by row
+    let responses = state
+        .database
+        .get_net_promoter_score_survey_responses(&survey_id)
+        .await
+        .map_err(DownloadResultsError::GetSurveyResponsesError)?;
 
     let mut csv = String::new();
     csv += "How likely are you to recommend us on a scale from 0 to 10?, And why?\n";
 
-    loop {
-        let result = rows.next().await;
-        match result {
-            Ok(None) => break,
-            Ok(Some(row)) => {
-                let result = row.get::<i32>(2);
-
-                let value_1 = match result {
-                    Ok(value) => value.to_string(),
-                    Err(error) => {
-                        tracing::error!("Error reading value at index 2: {:?}", error);
-                        return Err(StatusCode::INTERNAL_SERVER_ERROR);
-                    }
-                };
-
-                let result = row.get::<Option<String>>(3);
-
-                let value_2 = match result {
-                    Ok(value) => value,
-                    Err(error) => {
-                        tracing::error!("Error reading value at index 3: {:?}", error);
-                        return Err(StatusCode::INTERNAL_SERVER_ERROR);
-                    }
-                };
-
-                // Füge alle Werte der Zeile als CSV hinzu
-
-                csv += &if let Some(value_2) = value_2 {
-                    format!("{}, {}\n", value_1, value_2)
-                } else {
-                    format!("{}, No response\n", value_1)
-                };
-            }
-            Err(error) => {
-                tracing::error!("Error reading query result: {:?}", error);
-                return Err(StatusCode::INTERNAL_SERVER_ERROR);
-            }
-        }
+    for (answer_1, answer_2) in responses {
+        csv += &if let Some(answer_2) = answer_2 {
+            format!("{}, {}\n", answer_1, answer_2)
+        } else {
+            format!("{},\n", answer_1)
+        };
     }
 
-    tracing::debug!("csv: {:?}", csv);
-    Ok(csv)
+    let headers = create_csv_download_headers(&survey_id)?;
+
+    Ok((headers, csv).into_response())
 }
