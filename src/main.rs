@@ -22,6 +22,7 @@ use tower_http::services::ServeDir;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
+mod accept_language;
 mod auth;
 mod database;
 mod routes;
