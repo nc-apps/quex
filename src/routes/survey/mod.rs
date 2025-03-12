@@ -1,3 +1,4 @@
+use crate::accept_language::middleware::AcceptedLanguage;
 use crate::auth::authenticated_user::AuthenticatedUser;
 use crate::database::{MultiRowQueryError, SingleRowQueryError, StatementError, SurveyType};
 use crate::{database, AppState};
@@ -8,12 +9,13 @@ use axum::extract::{FromRequest, Path, Request, State};
 use axum::http::{HeaderMap, HeaderValue};
 use axum::response::{Redirect, Response};
 use axum::routing::{get, post};
-use axum::{Form, Router};
+use axum::{Extension, Form, Router};
 use reqwest::header::{self, InvalidHeaderValue};
 use serde::Deserialize;
 use std::fmt::Debug;
 use std::sync::Arc;
 use time::OffsetDateTime;
+use unic_langid::LanguageIdentifier;
 
 pub(crate) mod attrakdiff;
 pub(crate) mod net_promoter_score;
@@ -77,6 +79,7 @@ pub(crate) struct Surveys {
 #[template(path = "surveys/index.html")]
 struct SurveysTemplate {
     surveys: Surveys,
+    language: LanguageIdentifier,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -96,10 +99,13 @@ impl IntoResponse for GetSurveysPageError {
 async fn get_surveys_page(
     State(state): State<AppState>,
     user: AuthenticatedUser,
-) -> Result<askama_axum::Response, GetSurveysPageError> {
+    language: Option<Extension<AcceptedLanguage>>,
+) -> Result<SurveysTemplate, GetSurveysPageError> {
     let surveys = state.database.get_user_surveys(&user.id).await?;
-    let surveys_template = SurveysTemplate { surveys };
-    Ok(surveys_template.into_response())
+    Ok(SurveysTemplate {
+        surveys,
+        language: language.unwrap_or_default().0 .0,
+    })
 }
 
 #[derive(thiserror::Error, Debug)]

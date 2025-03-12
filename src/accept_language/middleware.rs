@@ -12,10 +12,16 @@ use axum::{
 };
 use unic_langid::LanguageIdentifier;
 
-use crate::translation::SUPPORTED_LOCALES;
+use crate::translation::{ENGLISH, SUPPORTED_LOCALES};
 
 #[derive(Clone)]
-pub(crate) struct AcceptedLanguage(LanguageIdentifier);
+pub(crate) struct AcceptedLanguage(pub(crate) LanguageIdentifier);
+
+impl Default for AcceptedLanguage {
+    fn default() -> Self {
+        Self(ENGLISH)
+    }
+}
 
 pub(crate) async fn extract(mut request: Request, next: Next) -> impl IntoResponse {
     let header = request.headers().get(http::header::ACCEPT_LANGUAGE);

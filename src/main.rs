@@ -29,6 +29,8 @@ mod routes;
 mod secret;
 mod translation;
 
+pub(crate) use translation::translate;
+
 #[derive(thiserror::Error, Debug)]
 enum SigningSecretError {
     #[error("Error decoding signing secret")]
