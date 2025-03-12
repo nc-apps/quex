@@ -62,3 +62,7 @@ cookie = "0.18.1"
 bitwarden = "1.0.0"
 # Required to use Bitwarden
 uuid = "1.12.1"
+# For translations/localization/internationalization
+fluent-templates = "0.13.0"
+# For working with language identifiers
+unic-langid = "0.9.5"

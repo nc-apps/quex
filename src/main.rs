@@ -29,6 +29,16 @@ mod database;
 mod routes;
 mod secret;
 
+fluent_templates::static_loader! {
+    static LOCALES = {
+        locales: "./translations",
+        fallback_language: "en",
+    };
+}
+
+const ENGLISH: LanguageIdentifier = langid!("en");
+const GERMAN: LanguageIdentifier = langid!("de");
+
 #[derive(thiserror::Error, Debug)]
 enum SigningSecretError {
     #[error("Error decoding signing secret")]
