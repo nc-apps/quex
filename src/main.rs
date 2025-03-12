@@ -12,7 +12,6 @@ use auth::cookie::{self};
 use auth::open_id_connect::discovery;
 use auth::signer::{AntiForgeryTokenProvider, Signer};
 use axum::http::uri::InvalidUri;
-use axum::middleware;
 use axum::{http::Uri, routing::get, Router};
 use base64::prelude::BASE64_URL_SAFE_NO_PAD;
 use base64::Engine;
@@ -28,16 +27,7 @@ mod auth;
 mod database;
 mod routes;
 mod secret;
-
-fluent_templates::static_loader! {
-    static LOCALES = {
-        locales: "./translations",
-        fallback_language: "en",
-    };
-}
-
-const ENGLISH: LanguageIdentifier = langid!("en");
-const GERMAN: LanguageIdentifier = langid!("de");
+mod translation;
 
 #[derive(thiserror::Error, Debug)]
 enum SigningSecretError {
@@ -115,6 +105,7 @@ async fn main() -> Result<(), AppError> {
         .init();
 
     dotenv().ok();
+
     // Secrets
     let secrets = secret::setup().await?;
 
