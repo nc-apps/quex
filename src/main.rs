@@ -12,6 +12,7 @@ use auth::cookie::{self};
 use auth::open_id_connect::discovery;
 use auth::signer::{AntiForgeryTokenProvider, Signer};
 use axum::http::uri::InvalidUri;
+use axum::middleware;
 use axum::{http::Uri, routing::get, Router};
 use base64::prelude::BASE64_URL_SAFE_NO_PAD;
 use base64::Engine;
@@ -166,6 +167,9 @@ async fn main() -> Result<(), AppError> {
         .route("/error", get(routes::error::get_error_page))
         .merge(auth_routes)
         .merge(survey_routes)
+        .layer(axum::middleware::from_fn(
+            accept_language::middleware::extract,
+        ))
         // If the route could not be matched it might be a file
         .fallback_service(ServeDir::new("public"))
         .with_state(app_state);

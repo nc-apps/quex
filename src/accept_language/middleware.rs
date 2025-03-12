@@ -2,19 +2,20 @@
 //! - https://yieldcode.blog/post/webapp-localization-in-rust/
 //! - https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Accept-Language
 //! - https://httpwg.org/specs/rfc9110.html#field.accept-language
+//! - https://docs.rs/axum/latest/axum/middleware/index.html#passing-state-from-middleware-to-handlers
 use std::sync::Arc;
 
 use axum::{
     extract::Request,
-    http,
+    http::{self},
     middleware::Next,
-    response::{IntoResponse, Response},
+    response::IntoResponse,
 };
 
 #[derive(Clone)]
 pub(crate) struct AcceptedLanguage(Arc<str>);
 
-pub(crate) async fn extract(request: Request, next: Next) -> Response {
+pub(crate) async fn extract(mut request: Request, next: Next) -> impl IntoResponse {
     let header = request.headers().get(http::header::ACCEPT_LANGUAGE);
     let Some(value) = header else {
         return next.run(request).await;
@@ -80,10 +81,10 @@ pub(crate) async fn extract(request: Request, next: Next) -> Response {
         return http::StatusCode::NOT_ACCEPTABLE.into_response();
     };
 
-    //TODO
-    // request
-    //     .extensions_mut()
-    //     .insert(AcceptedLanguage(language.into()));
+    tracing::debug!("Accepted language: {language}");
+    let extension = AcceptedLanguage(Arc::from(language));
+
+    request.extensions_mut().insert(extension);
 
     next.run(request).await
 }
