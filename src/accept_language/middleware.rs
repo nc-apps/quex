@@ -3,7 +3,6 @@
 //! - https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Accept-Language
 //! - https://httpwg.org/specs/rfc9110.html#field.accept-language
 //! - https://docs.rs/axum/latest/axum/middleware/index.html#passing-state-from-middleware-to-handlers
-use std::sync::Arc;
 
 use axum::{
     extract::Request,
@@ -11,9 +10,12 @@ use axum::{
     middleware::Next,
     response::IntoResponse,
 };
+use unic_langid::LanguageIdentifier;
+
+use crate::translation::SUPPORTED_LOCALES;
 
 #[derive(Clone)]
-pub(crate) struct AcceptedLanguage(Arc<str>);
+pub(crate) struct AcceptedLanguage(LanguageIdentifier);
 
 pub(crate) async fn extract(mut request: Request, next: Next) -> impl IntoResponse {
     let header = request.headers().get(http::header::ACCEPT_LANGUAGE);
@@ -61,12 +63,19 @@ pub(crate) async fn extract(mut request: Request, next: Next) -> impl IntoRespon
             }
         };
 
-        if !SUPPORTED_LANGUAGES.contains(&language) {
+        let Ok(identifier) = language.parse() else {
+            tracing::warn!(
+                "Expected accept language header to contain a valid language identifier but got: \"{language}\""
+            );
+            continue;
+        };
+
+        if !SUPPORTED_LOCALES.contains(&identifier) {
             continue;
         }
 
         accepted_language = match accepted_language {
-            None => Some((language, quality)),
+            None => Some((identifier, quality)),
             Some((_, accepted_quality)) if accepted_quality < quality => {
                 Some((identifier, quality))
             }
@@ -77,12 +86,12 @@ pub(crate) async fn extract(mut request: Request, next: Next) -> impl IntoRespon
     // "The server may send back a 406 Not Acceptable error code when unable to serve content in a matching language"
     // https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Accept-Language
     // Browsers usually send en with en-US as fallback when users only set en-US
-    let Some((language, _)) = accepted_language else {
+    let Some((identifier, _)) = accepted_language else {
         return http::StatusCode::NOT_ACCEPTABLE.into_response();
     };
 
-    tracing::debug!("Accepted language: {language}");
-    let extension = AcceptedLanguage(Arc::from(language));
+    tracing::debug!("Accepted language: {identifier}");
+    let extension = AcceptedLanguage(identifier);
 
     request.extensions_mut().insert(extension);
 
