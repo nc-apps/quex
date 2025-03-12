@@ -68,7 +68,7 @@ pub(crate) async fn extract(mut request: Request, next: Next) -> impl IntoRespon
         accepted_language = match accepted_language {
             None => Some((language, quality)),
             Some((_, accepted_quality)) if accepted_quality < quality => {
-                Some((language, accepted_quality))
+                Some((identifier, quality))
             }
             _ => continue,
         }
