@@ -1,13 +1,17 @@
-use std::sync::Arc;
+use std::{borrow::Cow, collections::HashMap, sync::Arc};
 
+use fluent_templates::Loader;
 use libsql::{named_params, params::IntoParams, Builder, Database as LibsqlDatabase};
 use serde::Deserialize;
 use time::OffsetDateTime;
 
-use crate::survey::{
-    attrakdiff, format_date, net_promoter_score,
-    system_usability_score::{self, Response2, Score},
-    FormatDateError, Survey, Surveys,
+use crate::{
+    survey::{
+        attrakdiff, format_date, net_promoter_score,
+        system_usability_score::{self, Response2, Score},
+        FormatDateError, Survey,
+    },
+    LOCALES,
 };
 
 #[derive(thiserror::Error, Debug)]
@@ -85,6 +89,14 @@ pub(crate) enum GetSurveyError {
     RowError(#[from] SingleRowQueryError),
     #[error("Unexpected survey type: {0}")]
     UnexpectedSurveyType(Arc<str>),
+}
+
+/// Contains vectors for each survey type with the survey ids
+#[derive(Default)]
+pub(crate) struct Surveys {
+    pub(crate) attrakdiff: Vec<Survey>,
+    pub(crate) net_promoter_score: Vec<Survey>,
+    pub(crate) system_usability_score: Vec<Survey>,
 }
 
 /// A wrapper around the libsql database to hide the database and provide access to predefined queries

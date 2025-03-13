@@ -2,7 +2,7 @@ use fluent_templates::Loader;
 use unic_langid::{langid, LanguageIdentifier};
 
 fluent_templates::static_loader! {
-    static LOCALES = {
+    pub(crate) static LOCALES = {
         locales: "./translations",
         fallback_language: "en",
     };

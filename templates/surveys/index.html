@@ -3,12 +3,12 @@
 https://tailwindui.com/components/application-ui/lists/stacked-lists#component-aa5eae5161e0a8cd045cc1ed3f80302c
 #}
 <ul role="list" class="divide-y divide-gray-100">
-    {% for survey in survey_type %}
+    {% for entry in survey_type %}
     <li class="flex items-center justify-between py-5 gap-x-6">
         <div class="min-w-0">
             <div class="flex items-start gap-x-3">
                 <p class="text-sm font-semibold leading-6 text-gray-900">
-                    {{ survey.name }}
+                    {{ entry.survey.name }}
                 </p>
                 {# TODO add survey status #} {#
                 <p
@@ -26,7 +26,9 @@ https://tailwindui.com/components/application-ui/lists/stacked-lists#component-a
                 #}
                 <p>
                     Created
-                    <time datetime="{{ survey.created_machine_readable }}">{{ survey.created_human_readable }}</time>
+                    <time datetime="{{ entry.survey.created_machine_readable }}">
+                        {{ entry.survey.created_human_readable}}
+                    </time>
                 </p>
                 {# TODO allow sharing surveys with other researchers and show
                 creator #} {#
@@ -39,16 +41,17 @@ https://tailwindui.com/components/application-ui/lists/stacked-lists#component-a
         </div>
         <div class="flex items-center flex-none gap-x-4">
             <a href="{{ relative_url }}{{ survey.id }}"
-                class="hidden rounded-md bg-white px-2.5 py-1.5 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 sm:block">View
-                survey<span class="sr-only">, {{ survey.name }}</span></a>
+                class="hidden rounded-md bg-white px-2.5 py-1.5 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 sm:block">
+                {{ survey.view_label }}
+            </a>
         </div>
     </li>
     {% endfor %}
 </ul>
 {% endmacro surveys_list %}
 {% extends "layouts/authenticated.html" %}
-{% block title %}My
-Surveys
+{% block title %}
+{{ crate::translate("my-surveys", language)|title }}
 {% endblock %}
 {% block content %}
 
@@ -64,7 +67,7 @@ Surveys
                                 d="M9.293 2.293a1 1 0 0 1 1.414 0l7 7A1 1 0 0 1 17 11h-1v6a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1v-3a1 1 0 0 0-1-1H9a1 1 0 0 0-1 1v3a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-6H3a1 1 0 0 1-.707-1.707l7-7Z"
                                 clip-rule="evenodd" />
                         </svg>
-                        <span class="sr-only">Home</span>
+                        <span class="sr-only">{{ crate::translate("home", language) }}</span>
                     </a>
                 </div>
             </li>
@@ -76,7 +79,8 @@ Surveys
                             d="M8.22 5.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06-1.06L11.94 10 8.22 6.28a.75.75 0 0 1 0-1.06Z"
                             clip-rule="evenodd" />
                     </svg>
-                    <a href="/surveys" class="ml-4 text-sm font-medium text-gray-500 hover:text-gray-700">Surveys</a>
+                    <a href="/surveys" class="ml-4 text-sm font-medium text-gray-500 hover:text-gray-700">{{
+                        crate::translate("surveys", language) }}</a>
                 </div>
             </li>
         </ol>
@@ -89,17 +93,17 @@ Surveys
 
 
     <h2 class="mt-5 text-xl font-semibold leading-6 text-gray-900">AttrakDiff</h2>
-    {% call surveys_list(surveys.attrakdiff, "/surveys/ad/") %}
+    {% call surveys_list(attrakdiff_surveys, "/surveys/ad/") %}
 
     <h2 class="mt-3 text-xl font-semibold leading-6 text-gray-900">
         Net Promoter Score
     </h2>
-    {% call surveys_list(surveys.net_promoter_score, "/surveys/nps/") %}
+    {% call surveys_list(net_promoter_score_surveys, "/surveys/nps/") %}
 
     <h2 class="mt-3 text-xl font-semibold leading-6 text-gray-900">
         System Usability Score
     </h2>
-    {% call surveys_list(surveys.system_usability_score, "/surveys/sus/") %}
+    {% call surveys_list(system_usability_score_surveys, "/surveys/sus/") %}
 
 </main>
 {% call super() %} {% endblock %}

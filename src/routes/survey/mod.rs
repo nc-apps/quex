@@ -1,7 +1,9 @@
 use crate::auth::authenticated_user::AuthenticatedUser;
-use crate::database::{MultiRowQueryError, SingleRowQueryError, StatementError, SurveyType};
+use crate::database::{
+    MultiRowQueryError, SingleRowQueryError, StatementError, SurveyType, Surveys,
+};
 use crate::preferred_language::PreferredLanguage;
-use crate::{database, AppState};
+use crate::{database, AppState, LOCALES};
 use askama::Template;
 use askama_axum::IntoResponse;
 use axum::extract::rejection::FormRejection;
@@ -10,8 +12,11 @@ use axum::http::{HeaderMap, HeaderValue};
 use axum::response::{Redirect, Response};
 use axum::routing::{get, post};
 use axum::{Extension, Form, Router};
+use fluent_templates::Loader;
 use reqwest::header::{self, InvalidHeaderValue};
 use serde::Deserialize;
+use std::borrow::Cow;
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::Arc;
 use time::OffsetDateTime;
@@ -66,19 +71,17 @@ pub(crate) struct Survey {
     pub(crate) created_machine_readable: String,
 }
 
-/// Contains vectors for each survey type with the survey ids
-#[derive(Default)]
-pub(crate) struct Surveys {
-    pub(crate) attrakdiff: Vec<Survey>,
-    pub(crate) net_promoter_score: Vec<Survey>,
-    pub(crate) system_usability_score: Vec<Survey>,
+struct Entry {
+    view_label: String,
+    survey: Survey,
 }
-
 /// The HTML template for the surveys overview page
 #[derive(Template)]
 #[template(path = "surveys/index.html")]
 struct SurveysTemplate {
-    surveys: Surveys,
+    attrakdiff_surveys: Vec<Entry>,
+    net_promoter_score_surveys: Vec<Entry>,
+    system_usability_score_surveys: Vec<Entry>,
     language: LanguageIdentifier,
 }
 
@@ -101,8 +104,52 @@ async fn get_surveys_page(
     user: AuthenticatedUser,
     PreferredLanguage(language): PreferredLanguage,
 ) -> Result<SurveysTemplate, GetSurveysPageError> {
-    let surveys = state.database.get_user_surveys(&user.id).await?;
-    Ok(SurveysTemplate { surveys, language })
+    let Surveys {
+        attrakdiff,
+        net_promoter_score,
+        system_usability_score,
+    } = state.database.get_user_surveys(&user.id).await?;
+
+    let mut attrakdiff_surveys = Vec::with_capacity(attrakdiff.len());
+    let mut net_promoter_score_surveys = Vec::with_capacity(net_promoter_score.len());
+    let mut system_usability_score_surveys = Vec::with_capacity(system_usability_score.len());
+
+    let mut translation_arguments = HashMap::new();
+    const KEY: Cow<'static, str> = Cow::Borrowed("title");
+
+    let mut create_label = |survey_name: &str| {
+        let value = format!("<span class=\"sr-only\">{}</span>", survey_name);
+        translation_arguments.insert(KEY, value.into());
+        LOCALES.lookup_with_args(&language, "create-survey", &translation_arguments)
+    };
+
+    for survey in attrakdiff {
+        attrakdiff_surveys.push(Entry {
+            view_label: create_label(&survey.name),
+            survey,
+        });
+    }
+
+    for survey in net_promoter_score {
+        net_promoter_score_surveys.push(Entry {
+            view_label: create_label(&survey.name),
+            survey,
+        });
+    }
+
+    for survey in system_usability_score {
+        system_usability_score_surveys.push(Entry {
+            view_label: create_label(&survey.name),
+            survey,
+        });
+    }
+
+    Ok(SurveysTemplate {
+        attrakdiff_surveys,
+        net_promoter_score_surveys,
+        system_usability_score_surveys,
+        language,
+    })
 }
 
 #[derive(thiserror::Error, Debug)]
