@@ -22,9 +22,9 @@ use tower_http::services::ServeDir;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
-mod accept_language;
 mod auth;
 mod database;
+mod preferred_language;
 mod routes;
 mod secret;
 mod translation;
@@ -170,9 +170,6 @@ async fn main() -> Result<(), AppError> {
         .route("/error", get(routes::error::get_error_page))
         .merge(auth_routes)
         .merge(survey_routes)
-        .layer(axum::middleware::from_fn(
-            accept_language::middleware::extract,
-        ))
         // If the route could not be matched it might be a file
         .fallback_service(ServeDir::new("public"))
         .with_state(app_state);

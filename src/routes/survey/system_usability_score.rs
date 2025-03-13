@@ -1,5 +1,6 @@
 use crate::auth::authenticated_user::AuthenticatedUser;
 use crate::database::StatementError;
+use crate::preferred_language::PreferredLanguage;
 use crate::routes::create_share_link;
 use crate::AppState;
 use askama::Template;
@@ -12,6 +13,7 @@ use reqwest::StatusCode;
 use serde::Deserialize;
 use std::sync::Arc;
 use time::OffsetDateTime;
+use unic_langid::LanguageIdentifier;
 
 use super::{
     create_csv_download_headers, CreateSurveyError, DownloadResultsError, GetResultsPageError,
@@ -135,6 +137,7 @@ struct SystemUsabilityScoreResultsTemplate {
     responses: Vec<Response2>,
     survey_url: String,
     score: Score,
+    language: LanguageIdentifier,
 }
 
 /// Gets the details page that displays the results of the survey and gives insights to the responses
@@ -142,6 +145,7 @@ pub(super) async fn get_results_page(
     State(state): State<AppState>,
     Path(survey_id): Path<Arc<str>>,
     user: AuthenticatedUser,
+    PreferredLanguage(language): PreferredLanguage,
 ) -> Result<impl IntoResponse, GetResultsPageError> {
     let survey_name = state
         .database
@@ -166,6 +170,7 @@ pub(super) async fn get_results_page(
         responses,
         survey_url,
         score,
+        language,
     }
     .into_response())
 }

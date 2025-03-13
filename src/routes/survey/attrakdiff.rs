@@ -1,5 +1,6 @@
 use crate::auth::authenticated_user::AuthenticatedUser;
 use crate::database::StatementError;
+use crate::preferred_language::PreferredLanguage;
 use crate::routes::create_share_link;
 use crate::AppState;
 use askama::Template;
@@ -12,6 +13,7 @@ use reqwest::StatusCode;
 use serde::Deserialize;
 use std::sync::Arc;
 use time::OffsetDateTime;
+use unic_langid::LanguageIdentifier;
 
 use super::{
     create_csv_download_headers, CreateSurveyError, DownloadResultsError, GetResultsPageError,
@@ -184,6 +186,7 @@ struct AttrakdiffResultsTemplate {
     responses: Vec<[i32; 28]>,
     /// The url that can be used to share the survey with respondents
     survey_url: String,
+    language: LanguageIdentifier,
 }
 
 impl IntoResponse for GetResultsPageError {
@@ -198,6 +201,7 @@ pub(super) async fn get_results_page(
     State(state): State<AppState>,
     Path(survey_id): Path<Arc<str>>,
     user: AuthenticatedUser,
+    PreferredLanguage(language): PreferredLanguage,
 ) -> Result<impl IntoResponse, GetResultsPageError> {
     // This also checks if the user has access to the survey
     let survey_name = state
@@ -222,6 +226,7 @@ pub(super) async fn get_results_page(
         name: survey_name,
         responses,
         survey_url,
+        language,
     }
     .into_response())
 }

@@ -4,40 +4,36 @@
 //! - https://httpwg.org/specs/rfc9110.html#field.accept-language
 //! - https://docs.rs/axum/latest/axum/middleware/index.html#passing-state-from-middleware-to-handlers
 
+use std::convert::Infallible;
+
 use axum::{
-    extract::Request,
-    http::{self},
-    middleware::Next,
-    response::IntoResponse,
+    async_trait,
+    extract::FromRequestParts,
+    http::{self, request::Parts},
 };
 use unic_langid::LanguageIdentifier;
 
 use crate::translation::{ENGLISH, SUPPORTED_LOCALES};
 
 #[derive(Clone)]
-pub(crate) struct AcceptedLanguage(pub(crate) LanguageIdentifier);
+pub(crate) struct PreferredLanguage(pub(crate) LanguageIdentifier);
 
-impl Default for AcceptedLanguage {
+impl Default for PreferredLanguage {
     fn default() -> Self {
         Self(ENGLISH)
     }
 }
 
-pub(crate) async fn extract(mut request: Request, next: Next) -> impl IntoResponse {
-    let header = request.headers().get(http::header::ACCEPT_LANGUAGE);
-    let Some(value) = header else {
-        return next.run(request).await;
-    };
+fn try_from_header(request: &Parts) -> Option<LanguageIdentifier> {
+    let value = request.headers.get(http::header::ACCEPT_LANGUAGE)?;
 
-    let value = match value.to_str() {
-        Ok(value) => value,
-        Err(error) => {
-            tracing::warn!("Expected accept language header to contain a string value: {error}");
-            return next.run(request).await;
-        }
-    };
+    let value = value
+        .to_str()
+        .inspect_err(|error| {
+            tracing::warn!("Expected accept language header to contain a string value: {error}")
+        })
+        .ok()?;
 
-    const SUPPORTED_LANGUAGES: [&str; 2] = ["en", "de"];
     let mut accepted_language = None;
 
     for value in value.split(',') {
@@ -76,6 +72,7 @@ pub(crate) async fn extract(mut request: Request, next: Next) -> impl IntoRespon
             continue;
         };
 
+        // Could also match en-US to en but most requests for en-US also contain en
         if !SUPPORTED_LOCALES.contains(&identifier) {
             continue;
         }
@@ -89,17 +86,20 @@ pub(crate) async fn extract(mut request: Request, next: Next) -> impl IntoRespon
         }
     }
 
-    // "The server may send back a 406 Not Acceptable error code when unable to serve content in a matching language"
-    // https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Accept-Language
-    // Browsers usually send en with en-US as fallback when users only set en-US
-    let Some((identifier, _)) = accepted_language else {
-        return http::StatusCode::NOT_ACCEPTABLE.into_response();
-    };
+    accepted_language.map(|(language, _)| language)
+}
 
-    tracing::debug!("Accepted language: {identifier}");
-    let extension = AcceptedLanguage(identifier);
+#[async_trait]
+impl<S> FromRequestParts<S> for PreferredLanguage
+where
+    S: Send + Sync,
+{
+    type Rejection = Infallible;
 
-    request.extensions_mut().insert(extension);
-
-    next.run(request).await
+    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
+        // Could also add a preferred language cookie read here if we add that
+        Ok(try_from_header(parts)
+            .map(PreferredLanguage)
+            .unwrap_or_default())
+    }
 }

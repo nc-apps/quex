@@ -1,6 +1,6 @@
-use crate::accept_language::middleware::AcceptedLanguage;
 use crate::auth::authenticated_user::AuthenticatedUser;
 use crate::database::{MultiRowQueryError, SingleRowQueryError, StatementError, SurveyType};
+use crate::preferred_language::PreferredLanguage;
 use crate::{database, AppState};
 use askama::Template;
 use askama_axum::IntoResponse;
@@ -99,13 +99,10 @@ impl IntoResponse for GetSurveysPageError {
 async fn get_surveys_page(
     State(state): State<AppState>,
     user: AuthenticatedUser,
-    language: Option<Extension<AcceptedLanguage>>,
+    PreferredLanguage(language): PreferredLanguage,
 ) -> Result<SurveysTemplate, GetSurveysPageError> {
     let surveys = state.database.get_user_surveys(&user.id).await?;
-    Ok(SurveysTemplate {
-        surveys,
-        language: language.unwrap_or_default().0 .0,
-    })
+    Ok(SurveysTemplate { surveys, language })
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -213,10 +210,12 @@ async fn get_survey_page(
 
 #[derive(Template)]
 #[template(path = "surveys/new.html")]
-struct NewSurveyTemplate;
+struct NewSurveyTemplate {
+    language: LanguageIdentifier,
+}
 
-async fn get_new_survey_page() -> impl IntoResponse {
-    NewSurveyTemplate {}.into_response()
+async fn get_new_survey_page(PreferredLanguage(language): PreferredLanguage) -> impl IntoResponse {
+    NewSurveyTemplate { language }.into_response()
 }
 
 #[derive(Deserialize, Debug)]
