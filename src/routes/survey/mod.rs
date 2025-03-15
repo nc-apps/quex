@@ -109,7 +109,6 @@ async fn get_surveys_page(
     // - https://html.spec.whatwg.org/multipage/text-level-semantics.html#datetime-value
     // - https://html.spec.whatwg.org/multipage/common-microsyntaxes.html#valid-local-date-and-time-string
     // ISO 8601 format should be fine though 🥴
-
     let to_entry = |survey: Survey| -> Result<Entry, GetSurveysPageError> {
         Ok(Entry {
             created_human_readable: format_date(survey.created_at_utc, &language)?,

@@ -660,7 +660,7 @@ impl Database {
 
         while let Some(row) = rows.next().await.map_err(MultiRowQueryError::NextRow)? {
             let answer_1: i32 = row.get(3).map_err(MultiRowQueryError::Row)?;
-            let answer_2: Option<String> = row.get(3).map_err(MultiRowQueryError::Row)?;
+            let answer_2: Option<String> = row.get(4).map_err(MultiRowQueryError::Row)?;
 
             responses.push((answer_1, answer_2));
         }
