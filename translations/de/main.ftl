@@ -5,3 +5,5 @@ home = Startseite
 surveys = Umfragen
 # $title (String) - The title of the survey to view
 view-survey = Umfrage { $title } ansehen
+open = öffnen
+created = Erstellt

@@ -30,6 +30,7 @@ mod secret;
 mod translation;
 
 pub(crate) use translation::translate;
+pub(crate) use translation::translate_1;
 pub(crate) use translation::LOCALES;
 
 #[derive(thiserror::Error, Debug)]

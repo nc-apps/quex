@@ -4,4 +4,6 @@ sign-out = Sign out
 home = Home
 surveys = Surveys
 # $title (String) - The title of the survey to view
-view-survey = View survey { $title }
+view-survey =View survey { $title }
+open = open
+created = Created

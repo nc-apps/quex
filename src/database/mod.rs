@@ -1,17 +1,13 @@
-use std::{borrow::Cow, collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
-use fluent_templates::Loader;
 use libsql::{named_params, params::IntoParams, Builder, Database as LibsqlDatabase};
 use serde::Deserialize;
 use time::OffsetDateTime;
 
-use crate::{
-    survey::{
-        attrakdiff, format_date, net_promoter_score,
-        system_usability_score::{self, Response2, Score},
-        FormatDateError, Survey,
-    },
-    LOCALES,
+use crate::survey::{
+    attrakdiff, format_date, net_promoter_score,
+    system_usability_score::{self, Response2, Score},
+    FormatDateError,
 };
 
 #[derive(thiserror::Error, Debug)]
@@ -20,7 +16,7 @@ pub(crate) struct CreateError(#[from] libsql::Error);
 
 #[derive(thiserror::Error, Debug)]
 pub(crate) enum InitializationError {
-    #[error("Error creating databse: {0}")]
+    #[error("Error creating database: {0}")]
     Create(#[from] CreateError),
     #[error("Error connecting to database: {0}")]
     Connection(libsql::Error),
@@ -34,7 +30,7 @@ pub(crate) enum StatementError {
     Connection(libsql::Error),
     #[error("Error preparing statement: {0}")]
     Prepare(libsql::Error),
-    #[error("Error exectuing statement: {0}")]
+    #[error("Error executing statement: {0}")]
     Execute(libsql::Error),
 }
 
@@ -97,6 +93,13 @@ pub(crate) struct Surveys {
     pub(crate) attrakdiff: Vec<Survey>,
     pub(crate) net_promoter_score: Vec<Survey>,
     pub(crate) system_usability_score: Vec<Survey>,
+}
+
+/// Represents a survey in the surveys overview page and list.
+pub(crate) struct Survey {
+    pub(crate) id: Arc<str>,
+    pub(crate) name: Arc<str>,
+    pub(crate) created_at_utc: OffsetDateTime,
 }
 
 /// A wrapper around the libsql database to hide the database and provide access to predefined queries
@@ -469,19 +472,11 @@ impl Database {
             let survey_name = row.get_str(2).map_err(MultiRowQueryError::Row)?;
             let created_at_utc = row.get::<i64>(3).map_err(MultiRowQueryError::Row)?;
             let created_at_utc = OffsetDateTime::from_unix_timestamp(created_at_utc)?;
-            // More information on the correct datetime format
-            // - https://html.spec.whatwg.org/multipage/text-level-semantics.html#datetime-value
-            // - https://html.spec.whatwg.org/multipage/common-microsyntaxes.html#valid-local-date-and-time-string
-            // ISO 8601 format should be fine though 🥴
-            let machine_formatted_date =
-                created_at_utc.format(&time::format_description::well_known::Iso8601::DEFAULT)?;
 
             let survey = Survey {
                 id: survey_id.into(),
                 name: survey_name.into(),
-                //TODO add user timezone offset
-                created_human_readable: format_date(created_at_utc)?,
-                created_machine_readable: machine_formatted_date,
+                created_at_utc,
             };
 
             match survey_type {
