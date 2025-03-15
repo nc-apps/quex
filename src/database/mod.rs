@@ -5,7 +5,7 @@ use serde::Deserialize;
 use time::OffsetDateTime;
 
 use crate::survey::{
-    attrakdiff, format_date, net_promoter_score,
+    attrakdiff, net_promoter_score,
     system_usability_score::{self, Response2, Score},
     FormatDateError,
 };

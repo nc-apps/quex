@@ -3,7 +3,7 @@ use crate::database::{
     MultiRowQueryError, SingleRowQueryError, StatementError, Survey, SurveyType, Surveys,
 };
 use crate::preferred_language::PreferredLanguage;
-use crate::{database, AppState, LOCALES};
+use crate::{database, AppState};
 use askama::Template;
 use askama_axum::IntoResponse;
 use axum::extract::rejection::FormRejection;
@@ -11,13 +11,9 @@ use axum::extract::{FromRequest, Path, Request, State};
 use axum::http::{HeaderMap, HeaderValue};
 use axum::response::{Redirect, Response};
 use axum::routing::{get, post};
-use axum::{Extension, Form, Router};
-use fluent_templates::Loader;
-use icu::locid::Locale;
+use axum::{Form, Router};
 use reqwest::header::{self, InvalidHeaderValue};
 use serde::Deserialize;
-use std::borrow::Cow;
-use std::collections::HashMap;
 use std::fmt::Debug;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -83,11 +79,11 @@ struct SurveysTemplate {
 #[derive(thiserror::Error, Debug)]
 pub(crate) enum GetSurveysPageError {
     #[error("Error reading surveys from database: {0}")]
-    DatabaseError(#[from] database::GetUserSurveysError),
+    Database(#[from] database::GetUserSurveysError),
     #[error("Error formatting date")]
-    FormatError(#[from] time::error::Format),
+    Format(#[from] time::error::Format),
     #[error("Error formatting date for humans: {0}")]
-    HumanReadableDateError(#[from] FormatDateError),
+    HumanReadableDate(#[from] FormatDateError),
 }
 
 impl IntoResponse for GetSurveysPageError {

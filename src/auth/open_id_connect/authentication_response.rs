@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
-use axum::response::{IntoResponse, Redirect};
 use axum::extract::{Query, State};
+use axum::response::{IntoResponse, Redirect};
 use axum_extra::extract::SignedCookieJar;
 use serde::{Deserialize, Serialize};
 use url::Url;

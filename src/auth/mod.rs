@@ -7,7 +7,7 @@ use authenticated_user::AuthenticatedUser;
 use axum::routing::post;
 use axum::{
     extract::{Query, State},
-    http::{Uri},
+    http::Uri,
     response::Redirect,
     routing::get,
     Form, Router,
