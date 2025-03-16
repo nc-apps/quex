@@ -28,41 +28,120 @@ struct AttrakDiffTemplate {
 }
 
 /// Handler for the AttrakDiff survey page
-pub(super) fn get_page(id: Arc<str>) -> askama_axum::Response {
+pub(super) fn get_page(id: Arc<str>, language: &LanguageIdentifier) -> askama_axum::Response {
+    let translate = |key: &str| crate::translate(key, language);
     let attrakdiff_template = AttrakDiffTemplate {
         id,
         questions: vec![
-            ("Human".to_string(), "Technical".to_string()),
-            ("Isolating".to_string(), "Connective".to_string()),
-            ("Pleasant".to_string(), "Unpleasant".to_string()),
-            ("Inventive".to_string(), "Conventional".to_string()),
-            ("Simple".to_string(), "Complicated".to_string()),
-            ("Professional".to_string(), "Unprofessional".to_string()),
-            ("Ugly".to_string(), "Attractive".to_string()),
-            ("Practical".to_string(), "Impractical".to_string()),
-            ("Likable".to_string(), "Disagreeable".to_string()),
-            ("Cumbersome".to_string(), "Straightforward".to_string()),
-            ("Stylish".to_string(), "Tacky".to_string()),
-            ("Predictable".to_string(), "Unpredictable".to_string()),
-            ("Cheap".to_string(), "Premium".to_string()),
-            ("Alienating".to_string(), "Integrating".to_string()),
             (
-                "Brings me closer to people".to_string(),
-                "Separates me from people".to_string(),
+                translate("attrakdiff-human"),
+                translate("attrakdiff-technical"),
             ),
-            ("Unpresentable".to_string(), "Presentable".to_string()),
-            ("Rejecting".to_string(), "Inviting".to_string()),
-            ("Unimaginative".to_string(), "Creative".to_string()),
-            ("Good".to_string(), "Bad".to_string()),
-            ("Confusing".to_string(), "Clearly structured".to_string()),
-            ("Repelling".to_string(), "Appealing".to_string()),
-            ("Bold".to_string(), "Cautious".to_string()),
-            ("Innovative".to_string(), "Conservative".to_string()),
-            ("Dull".to_string(), "Captivating".to_string()),
-            ("Undemanding".to_string(), "Challenging".to_string()),
-            ("Motivating".to_string(), "Discouraging".to_string()),
-            ("Novel".to_string(), "Ordinary".to_string()),
-            ("Unruly".to_string(), "Manageable".to_string()),
+            (
+                translate("attrakdiff-isolating"),
+                translate("attrakdiff-connective"),
+            ),
+            (
+                translate("attrakdiff-pleasant"),
+                translate("attrakdiff-unpleasant"),
+            ),
+            (
+                translate("attrakdiff-inventive"),
+                translate("attrakdiff-conventional"),
+            ),
+            (
+                translate("attrakdiff-simple"),
+                translate("attrakdiff-complicated"),
+            ),
+            (
+                translate("attrakdiff-professional"),
+                translate("attrakdiff-unprofessional"),
+            ),
+            (
+                translate("attrakdiff-ugly"),
+                translate("attrakdiff-attractive"),
+            ),
+            (
+                translate("attrakdiff-practical"),
+                translate("attrakdiff-impractical"),
+            ),
+            (
+                translate("attrakdiff-likable"),
+                translate("attrakdiff-disagreeable"),
+            ),
+            (
+                translate("attrakdiff-cumbersome"),
+                translate("attrakdiff-straightforward"),
+            ),
+            (
+                translate("attrakdiff-stylish"),
+                translate("attrakdiff-tacky"),
+            ),
+            (
+                translate("attrakdiff-predictable"),
+                translate("attrakdiff-unpredictable"),
+            ),
+            (
+                translate("attrakdiff-cheap"),
+                translate("attrakdiff-premium"),
+            ),
+            (
+                translate("attrakdiff-alienating"),
+                translate("attrakdiff-integrating"),
+            ),
+            (
+                translate("attrakdiff-brings-me-closer-to-people"),
+                translate("attrakdiff-separates-me-from-people"),
+            ),
+            (
+                translate("attrakdiff-unpresentable"),
+                translate("attrakdiff-presentable"),
+            ),
+            (
+                translate("attrakdiff-rejecting"),
+                translate("attrakdiff-inviting"),
+            ),
+            (
+                translate("attrakdiff-unimaginative"),
+                translate("attrakdiff-creative"),
+            ),
+            (translate("attrakdiff-good"), translate("attrakdiff-bad")),
+            (
+                translate("attrakdiff-confusing"),
+                translate("attrakdiff-clearly-structured"),
+            ),
+            (
+                translate("attrakdiff-repelling"),
+                translate("attrakdiff-appealing"),
+            ),
+            (
+                translate("attrakdiff-bold"),
+                translate("attrakdiff-cautious"),
+            ),
+            (
+                translate("attrakdiff-innovative"),
+                translate("attrakdiff-conservative"),
+            ),
+            (
+                translate("attrakdiff-dull"),
+                translate("attrakdiff-captivating"),
+            ),
+            (
+                translate("attrakdiff-undemanding"),
+                translate("attrakdiff-challenging"),
+            ),
+            (
+                translate("attrakdiff-motivating"),
+                translate("attrakdiff-discouraging"),
+            ),
+            (
+                translate("attrakdiff-novel"),
+                translate("attrakdiff-ordinary"),
+            ),
+            (
+                translate("attrakdiff-unruly"),
+                translate("attrakdiff-manageable"),
+            ),
         ],
     };
 

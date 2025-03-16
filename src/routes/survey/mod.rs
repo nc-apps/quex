@@ -228,6 +228,7 @@ impl IntoResponse for GetSurveyError {
 async fn get_survey_page(
     State(state): State<AppState>,
     Path(survey_id): Path<Arc<str>>,
+    PreferredLanguage(language): PreferredLanguage,
 ) -> Result<Response, GetSurveyError> {
     // Get survey to check if it even exists
     let survey_type = state.database.get_survey_type(&survey_id).await?;
@@ -239,7 +240,7 @@ async fn get_survey_page(
     };
 
     Ok(match survey_type {
-        SurveyType::Attrakdiff => attrakdiff::get_page(survey_id),
+        SurveyType::Attrakdiff => attrakdiff::get_page(survey_id, &language),
         SurveyType::NetPromoterScore => net_promoter_score::get_page(survey_id),
         SurveyType::SystemUsabilityScore => system_usability_score::get_page(survey_id),
     })

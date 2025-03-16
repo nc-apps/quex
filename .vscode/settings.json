@@ -15,6 +15,7 @@
     "reqwest",
     "thiserror",
     "turso",
-    "unic-langid"
+    "unic-langid",
+    "unic_langid"
   ]
 }
