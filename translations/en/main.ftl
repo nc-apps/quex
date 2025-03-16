@@ -7,3 +7,4 @@ surveys = Surveys
 view-survey =View survey { $title }
 open = open
 created = Created
+Survey = Survey

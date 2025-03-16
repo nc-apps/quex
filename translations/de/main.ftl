@@ -7,3 +7,4 @@ surveys = Umfragen
 view-survey = Umfrage { $title } ansehen
 open = öffnen
 created = Erstellt
+Survey = Umfrage

@@ -88,13 +88,19 @@ pub(super) async fn create_response(
 pub(super) async fn create_new_survey(
     State(state): State<AppState>,
     user: AuthenticatedUser,
+    PreferredLanguage(language): PreferredLanguage,
     name: Option<String>,
 ) -> Result<Redirect, CreateSurveyError> {
     let survey_id = nanoid!();
 
     let name: Arc<str> = match name.as_deref() {
         // Use the first 6 characters of the survey id as the name if no name is provided
-        Some("") | None => format!("System Usability Score Survey {}", &survey_id[..7]).into(),
+        Some("") | None => format!(
+            "System Usability Score {} {}",
+            crate::translate("Survey", &language),
+            &survey_id[..7],
+        )
+        .into(),
         Some(name) => name.into(),
     };
 

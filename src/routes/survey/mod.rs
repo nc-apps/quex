@@ -279,15 +279,18 @@ impl IntoResponse for CreateSurveyError {
 async fn create_survey(
     state: State<AppState>,
     user: AuthenticatedUser,
+    language: PreferredLanguage,
     Form(request): Form<CreateSurveyRequest>,
 ) -> Result<Redirect, CreateSurveyError> {
     match request.r#type {
-        SurveyType::Attrakdiff => attrakdiff::create_new_survey(state, user, request.name).await,
+        SurveyType::Attrakdiff => {
+            attrakdiff::create_new_survey(state, user, language, request.name).await
+        }
         SurveyType::NetPromoterScore => {
-            net_promoter_score::create_new_survey(state, user, request.name).await
+            net_promoter_score::create_new_survey(state, user, language, request.name).await
         }
         SurveyType::SystemUsabilityScore => {
-            system_usability_score::create_new_survey(state, user, request.name).await
+            system_usability_score::create_new_survey(state, user, language, request.name).await
         }
     }
 }
