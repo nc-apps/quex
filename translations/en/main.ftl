@@ -71,3 +71,4 @@ attrakdiff-novel = novel
 attrakdiff-ordinary = ordinary
 attrakdiff-unruly = unruly
 attrakdiff-manageable = manageable
+submit-survey = Submit

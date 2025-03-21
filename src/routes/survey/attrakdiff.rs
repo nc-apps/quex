@@ -25,11 +25,13 @@ use super::{
 struct AttrakDiffTemplate {
     id: Arc<str>,
     questions: Vec<(String, String)>,
+    language: LanguageIdentifier,
 }
 
 /// Handler for the AttrakDiff survey page
-pub(super) fn get_page(id: Arc<str>, language: &LanguageIdentifier) -> askama_axum::Response {
-    let translate = |key: &str| crate::translate(key, language);
+pub(super) fn get_page(id: Arc<str>, language: LanguageIdentifier) -> askama_axum::Response {
+    let translate = |key: &str| crate::translate(key, &language);
+    tracing::debug!("Language: {}", language);
     let attrakdiff_template = AttrakDiffTemplate {
         id,
         questions: vec![
@@ -143,6 +145,7 @@ pub(super) fn get_page(id: Arc<str>, language: &LanguageIdentifier) -> askama_ax
                 translate("attrakdiff-manageable"),
             ),
         ],
+        language,
     };
 
     attrakdiff_template.into_response()

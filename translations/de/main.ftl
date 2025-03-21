@@ -71,3 +71,4 @@ attrakdiff-novel = neuartig
 attrakdiff-ordinary = herkömmlich
 attrakdiff-unruly = widerspenstig
 attrakdiff-manageable = handhabbar
+submit-survey = Absenden
