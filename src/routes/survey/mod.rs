@@ -242,7 +242,7 @@ async fn get_survey_page(
     Ok(match survey_type {
         SurveyType::Attrakdiff => attrakdiff::get_page(survey_id, language),
         SurveyType::NetPromoterScore => net_promoter_score::get_page(survey_id),
-        SurveyType::SystemUsabilityScore => system_usability_score::get_page(survey_id),
+        SurveyType::SystemUsabilityScore => system_usability_score::get_page(survey_id, language),
     })
 }
 

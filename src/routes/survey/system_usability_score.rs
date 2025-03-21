@@ -19,27 +19,33 @@ use super::{
     create_csv_download_headers, CreateSurveyError, DownloadResultsError, GetResultsPageError,
 };
 
-pub const QUESTIONS: [&str; 10] = [
-    "I think that I would like to use this system frequently",
-    "I found the system unnecessarily complex",
-    "I thought the system was easy to use",
-    "I think that I would need the support of a technical person to be able to use this system",
-    "I found the various functions in this system were well integrated",
-    "I thought there was too much inconsistency in this system",
-    "I would imagine that most people would learn to use this system very quickly",
-    "I found the system very cumbersome to use",
-    "I felt very confident using the system",
-    "I needed to learn a lot of things before I could get going with this system",
-];
-
 #[derive(Template)]
 #[template(path = "surveys/responses/system usability score.html")]
 struct SusTemplate {
     id: Arc<str>,
+    questions: [String; 10],
+    language: LanguageIdentifier,
 }
 
-pub(super) fn get_page(id: Arc<str>) -> askama_axum::Response {
-    let sus_template = SusTemplate { id };
+fn get_translated_questions(language: &LanguageIdentifier) -> [String; 10] {
+    let mut questions: [String; 10] = Default::default();
+    for index in 0..10 {
+        let question = crate::translate(
+            &format!("system-usability-score-question-{}", index + 1),
+            language,
+        );
+        questions[index] = question;
+    }
+    questions
+}
+
+pub(super) fn get_page(id: Arc<str>, language: LanguageIdentifier) -> askama_axum::Response {
+    let questions = get_translated_questions(&language);
+    let sus_template = SusTemplate {
+        id,
+        language,
+        questions,
+    };
 
     sus_template.into_response()
 }
@@ -144,6 +150,7 @@ struct SystemUsabilityScoreResultsTemplate {
     survey_url: String,
     score: Score,
     language: LanguageIdentifier,
+    questions: [String; 10],
 }
 
 /// Gets the details page that displays the results of the survey and gives insights to the responses
@@ -170,6 +177,7 @@ pub(super) async fn get_results_page(
         .map_err(GetResultsPageError::GetSurveyResponsesError)?;
 
     let survey_url = create_share_link(&state.configuration.server_url, &survey_id);
+    let questions = get_translated_questions(&language);
     Ok(SystemUsabilityScoreResultsTemplate {
         id: survey_id,
         name: survey_name,
@@ -177,6 +185,7 @@ pub(super) async fn get_results_page(
         survey_url,
         score,
         language,
+        questions,
     }
     .into_response())
 }
