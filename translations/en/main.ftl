@@ -110,3 +110,6 @@ complete-signup-your-name = Your name
 complete-signup-use-google-name = Use your Google account name
 complete-signup-description = Help others recognize you
 complete-signup-submit = Sign up
+sign-in-title = Sign in
+sign-in-subtitle = Sign in to your account
+sign-in-continue-with-google = Continue with Google

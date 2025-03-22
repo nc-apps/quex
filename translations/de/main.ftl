@@ -110,3 +110,6 @@ complete-signup-your-name = Dein Name
 complete-signup-use-google-name = Verwende deinen Google-Account-Namen
 complete-signup-description = Hilf anderen, dich zu erkennen
 complete-signup-submit = Registrieren
+sign-in-title = Anmeldung
+sign-in-subtitle = Melde dich an deinen Account an
+sign-in-continue-with-google = Mit Google fortfahren
