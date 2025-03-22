@@ -298,10 +298,12 @@ async fn create_survey(
 
 #[derive(Template)]
 #[template(path = "surveys/responses/thanks.html")]
-struct ThanksTemplate {}
+struct ThanksTemplate {
+    language: LanguageIdentifier,
+}
 
-async fn thanks() -> impl IntoResponse {
-    ThanksTemplate {}.into_response()
+async fn thanks(PreferredLanguage(language): PreferredLanguage) -> impl IntoResponse {
+    ThanksTemplate { language }.into_response()
 }
 
 #[derive(thiserror::Error, Debug)]

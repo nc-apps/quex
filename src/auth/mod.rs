@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use crate::database::StatementError;
+use crate::preferred_language::PreferredLanguage;
 use crate::AppState;
 use askama_axum::{IntoResponse, Template};
 use authenticated_user::AuthenticatedUser;
@@ -21,6 +22,7 @@ use serde::{Deserialize, Serialize};
 use signer::{AntiForgeryToken, Signer};
 use time::{Duration, OffsetDateTime};
 use token::complete_signin::{CompleteSignInToken, DecodeTokenError, EncodeTokenError};
+use unic_langid::LanguageIdentifier;
 use url::Url;
 
 pub(crate) mod authenticated_user;
@@ -33,10 +35,12 @@ mod token;
 #[template(path = "auth/signin.html")]
 struct SignInTemplate {
     sign_in_with_google_url: Option<Url>,
+    language: LanguageIdentifier,
 }
 
 async fn get_sign_in_page(
     State(state): State<AppState>,
+    PreferredLanguage(language): PreferredLanguage,
     user: Option<AuthenticatedUser>,
 ) -> impl IntoResponse {
     // Check if is already authenticated and redirect to surveys
@@ -53,6 +57,7 @@ async fn get_sign_in_page(
 
     let sign_in_template = SignInTemplate {
         sign_in_with_google_url: url,
+        language,
     };
 
     sign_in_template.into_response()
@@ -151,14 +156,15 @@ impl IntoResponse for CompleteSignInError {
 
 #[derive(Template)]
 #[template(path = "auth/complete signup.html")]
-struct CompleteSigninTemplate {
+struct CompleteSignInTemplate {
     name: Option<Arc<str>>,
     token: Arc<str>,
     request_data_url: Option<Url>,
+    language: LanguageIdentifier,
 }
 
 #[derive(Deserialize, Debug)]
-struct CompleteSigninRequest {
+struct CompleteSignInRequest {
     name: Option<Arc<str>>,
 }
 
@@ -168,14 +174,15 @@ struct CompleteSigninRequest {
 /// not valid and they should be returned to the sign in page
 /// ## Getting someones google account id
 /// They can't create a valid link as they can't provide a valid signature. They are returned to sign in.
-/// ## User abandonds the sign in but the link is leaked
+/// ## User abandons the sign in but the link is leaked
 /// This is probably very unlikely as the link is only shared with the user.
 /// An "issued at" value with a expire duration invalidates abandoned links after some time.
 async fn get_complete_signup_page(
     State(state): State<AppState>,
+    PreferredLanguage(language): PreferredLanguage,
     token: CompleteSignInToken,
-    Query(query): Query<CompleteSigninRequest>,
-) -> Result<CompleteSigninTemplate, CompleteSignInError> {
+    Query(query): Query<CompleteSignInRequest>,
+) -> Result<CompleteSignInTemplate, CompleteSignInError> {
     let expires_at = token.issued_at + Duration::minutes(15);
     if expires_at < OffsetDateTime::now_utc() {
         return Err(CompleteSignInError::Expired);
@@ -195,10 +202,11 @@ async fn get_complete_signup_page(
         None
     };
 
-    Ok(CompleteSigninTemplate {
+    Ok(CompleteSignInTemplate {
         name: query.name,
         token: Arc::from(token),
         request_data_url,
+        language,
     })
 }
 
