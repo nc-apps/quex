@@ -1,5 +1,8 @@
-{% extends "layouts/authenticated.html" %} {% block title %}New Survey
-{% endblock %} {% block content %}
+{% extends "layouts/authenticated.html" %}
+{% block title %}
+{{ crate::translate("new-survey-title", language) }}
+{% endblock %}
+{% block content %}
 
 <main class="max-w-3xl px-4 py-4 mx-auto sm:px-6 lg:px-8">
     <nav class="flex" aria-label="Breadcrumb">
@@ -13,7 +16,9 @@
                                 d="M9.293 2.293a1 1 0 0 1 1.414 0l7 7A1 1 0 0 1 17 11h-1v6a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1v-3a1 1 0 0 0-1-1H9a1 1 0 0 0-1 1v3a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-6H3a1 1 0 0 1-.707-1.707l7-7Z"
                                 clip-rule="evenodd" />
                         </svg>
-                        <span class="sr-only">Home</span>
+                        <span class="sr-only">
+                            {{ crate::translate("home", language) }}
+                        </span>
                     </a>
                 </div>
             </li>
@@ -25,7 +30,9 @@
                             d="M8.22 5.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06-1.06L11.94 10 8.22 6.28a.75.75 0 0 1 0-1.06Z"
                             clip-rule="evenodd" />
                     </svg>
-                    <a href="/surveys" class="ml-4 text-sm font-medium text-gray-500 hover:text-gray-700">Surveys</a>
+                    <a href="/surveys" class="ml-4 text-sm font-medium text-gray-500 hover:text-gray-700">
+                        {{ crate::translate("surveys", language) }}
+                    </a>
                 </div>
             </li>
             <li>
@@ -36,7 +43,9 @@
                             d="M8.22 5.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06-1.06L11.94 10 8.22 6.28a.75.75 0 0 1 0-1.06Z"
                             clip-rule="evenodd" />
                     </svg>
-                    <a href="/surveys/new" class="ml-4 text-sm font-medium text-gray-500 hover:text-gray-700">New</a>
+                    <a href="/surveys/new" class="ml-4 text-sm font-medium text-gray-500 hover:text-gray-700">
+                        {{ crate::translate("new", language) }}
+                    </a>
                 </div>
             </li>
         </ol>
@@ -45,10 +54,14 @@
     <form method="post">
         <div class="mt-3 space-y-12">
             <div class="pb-12 border-b border-gray-900/10">
-                <h2 class="text-base font-semibold leading-7 text-gray-900">New Survey</h2>
+                <h2 class="text-base font-semibold leading-7 text-gray-900">
+                    {{ crate::translate("new-survey-title", language) }}
+                </h2>
                 {# Not required #}
                 <div class="mt-5 sm:col-span-4">
-                    <label for="name" class="block text-sm font-medium leading-6 text-gray-900">Name</label>
+                    <label for="name" class="block text-sm font-medium leading-6 text-gray-900">
+                        {{ crate::translate("new-survey-name", language) }}
+                    </label>
                     <div class="mt-2">
                         <div
                             class="flex rounded-md shadow-sm ring-1 ring-inset ring-gray-300 focus-within:ring-2 focus-within:ring-inset focus-within:ring-blue-600 sm:max-w-md">
@@ -62,26 +75,31 @@
 
 
                 <fieldset class="mt-7">
-                    <legend class="text-sm font-semibold leading-6 text-gray-900">Survey Type</legend>
+                    <legend class="text-sm font-semibold leading-6 text-gray-900">
+                        {{ crate::translate("new-survey-type", language) }}
+                    </legend>
 
                     <div class="mt-6 space-y-6">
                         <div class="flex items-center gap-x-3">
                             <input id="attrakdiff" name="type" type="radio" value="ad" required
                                 class="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-600">
-                            <label for="attrakdiff"
-                                class="block text-sm font-medium leading-6 text-gray-900">AttrakDiff</label>
+                            <label for="attrakdiff" class="block text-sm font-medium leading-6 text-gray-900">
+                                AttrakDiff
+                            </label>
                         </div>
                         <div class="flex items-center gap-x-3">
                             <input id="nps" name="type" type="radio" value="nps" required
                                 class="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-600">
-                            <label for="nps" class="block text-sm font-medium leading-6 text-gray-900">Net Promoter
-                                Score</label>
+                            <label for="nps" class="block text-sm font-medium leading-6 text-gray-900">
+                                Net Promoter Score
+                            </label>
                         </div>
                         <div class="flex items-center gap-x-3">
                             <input id="sus" name="type" type="radio" value="sus" required
                                 class="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-600">
-                            <label for="sus" class="block text-sm font-medium leading-6 text-gray-900">System Usability
-                                Score</label>
+                            <label for="sus" class="block text-sm font-medium leading-6 text-gray-900">
+                                System Usability Score
+                            </label>
                         </div>
                     </div>
                 </fieldset>
@@ -91,12 +109,15 @@
         <div class="flex items-center justify-end mt-6 gap-x-6">
             <a href="/surveys"
                 class="px-3 py-2 text-sm font-semibold text-gray-900 bg-white rounded-md shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50">
-                Cancel
+                {{ crate::translate("new-survey-cancel", language) }}
             </a>
             <button type="submit"
-                class="px-3 py-2 text-sm font-semibold text-white bg-blue-600 rounded-md shadow-sm hover:bg-blue-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">Create</button>
+                class="px-3 py-2 text-sm font-semibold text-white bg-blue-600 rounded-md shadow-sm hover:bg-blue-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">
+                {{ crate::translate("new-survey-create", language) }}
+            </button>
         </div>
     </form>
 </main>
 
-{% call super() %} {% endblock %}
+{% call super() %}
+{% endblock %}
