@@ -90,3 +90,6 @@ system-usability-score-question-7 = I would imagine that most people would learn
 system-usability-score-question-8 = I found the system very cumbersome to use
 system-usability-score-question-9 = I felt very confident using the system
 system-usability-score-question-10 = I needed to learn a lot of things before I could get going with this system
+net-promoter-score-question-1 = How likely are you to recommend us on a scale from 0 to 10?
+net-promoter-score-question-2 = And why? (optional)
+survey-no-response = (No response)

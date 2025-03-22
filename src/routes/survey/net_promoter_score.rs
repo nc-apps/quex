@@ -23,10 +23,11 @@ use super::{
 #[template(path = "surveys/responses/net promoter score.html")]
 struct NpsTemplate {
     id: Arc<str>,
+    language: LanguageIdentifier,
 }
 
-pub(super) fn get_page(id: Arc<str>) -> askama_axum::Response {
-    let nps_template = NpsTemplate { id };
+pub(super) fn get_page(id: Arc<str>, language: LanguageIdentifier) -> askama_axum::Response {
+    let nps_template = NpsTemplate { id, language };
 
     nps_template.into_response()
 }

@@ -90,3 +90,6 @@ system-usability-score-question-7 = Ich glaube, dass die meisten Menschen sehr s
 system-usability-score-question-8 = Ich fand das System war sehr umständlich zu benutzen
 system-usability-score-question-9 = Ich fühlte mich bei der Nutzung des Systems sehr sicher
 system-usability-score-question-10 = Ich musste viele Dinge lernen, bevor ich mit dem System arbeiten konnte
+net-promoter-score-question-1 = Wie wahrscheinlich ist es, dass Sie uns auf einer Skala von 0 bis 10 empfehlen?
+net-promoter-score-question-2 = Und warum? (optional)
+survey-no-response = (Keine Antwort)
