@@ -102,3 +102,5 @@ new-survey-name = Name
 new-survey-type = Umfragetyp
 new-survey-cancel = Abbrechen
 new-survey-create = Erstellen
+thanks-title = Danke!
+thanks-subtitle = Vielen Dank, dass Sie die Zeit für diese Umfrage genommen haben
