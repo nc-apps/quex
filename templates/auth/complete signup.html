@@ -1,6 +1,6 @@
 {% extends "layouts/base.html" %}
 {% block title %}
-Complete Sign up
+{{ crate::translate("complete-signup-title", language) }}
 {% endblock %}
 {% block content %}
 
@@ -11,20 +11,23 @@ Complete Sign up
         <h1 class="mt-10 text-4xl font-bold leading-9 tracking-tight text-center text-blue-900">Quex</h1>
         <hgroup>
             <h2 class="mt-10 mb-2 text-2xl font-bold leading-9 tracking-tight text-center text-gray-900">
-                Complete your Sign up
+                {{ crate::translate("complete-signup-title", language) }}
             </h2>
         </hgroup>
         <p class="font-semibold leading-snug text-center text-gray-600 text-pretty">
-            Hi, this seems to be the first time you are using Quex.
+            {{ crate::translate("complete-signup-subtitle", language) }}
         </p>
     </div>
 
     <div class="mt-10 sm:mx-auto sm:w-full sm:max-w-sm">
         <div class="flex items-center justify-between">
-            <label for="name" class="block font-medium text-gray-900 text-sm/6">Your name</label>
+            <label for="name" class="block font-medium text-gray-900 text-sm/6">
+                {{ crate::translate("complete-signup-your-name", language) }}
+            </label>
             {% if let Some(url) = request_data_url %}
-            <a href="{{ url }}" rel="noreferrer" class="text-sm font-semibold text-blue-600 hover:text-blue-500">Use
-                your Google account name</a>
+            <a href="{{ url }}" rel="noreferrer" class="text-sm font-semibold text-blue-600 hover:text-blue-500">
+                {{ crate::translate("complete-signup-use-google-name", language) }}
+            </a>
             {% endif %}
         </div>
         <div class="mt-2">
@@ -33,11 +36,13 @@ Complete Sign up
                 class="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6"
                 aria-describedby="name-description">
         </div>
-        <p class="mt-2 text-sm text-gray-500" id="name-description">Help others recognize you</p>
+        <p class="mt-2 text-sm text-gray-500" id="name-description">
+            {{ crate::translate("complete-signup-description", language) }}
+        </p>
         <input type="hidden" name="token" value="{{ token }}">
         <button type="submit"
             class="flex mt-6 w-full justify-center rounded-md bg-indigo-600 px-3 py-1.5 text-sm/6 font-semibold text-white shadow-xs hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">
-            Sign up
+            {{ crate::translate("complete-signup-submit", language) }}
         </button>
     </div>
 
