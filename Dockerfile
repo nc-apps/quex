@@ -43,6 +43,7 @@ FROM builder AS build
 RUN rm src/*.rs
 COPY ./src ./src
 COPY ./templates ./templates
+COPY ./translations ./translations
 
 # Build the application
 RUN cargo build --release
