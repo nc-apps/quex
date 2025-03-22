@@ -93,3 +93,6 @@ system-usability-score-question-10 = I needed to learn a lot of things before I 
 net-promoter-score-question-1 = How likely are you to recommend us on a scale from 0 to 10?
 net-promoter-score-question-2 = And why? (optional)
 survey-no-response = (No response)
+error-page-title = Error
+error-page-subtitle = Sorry, something on our end went wrong
+error-page-go-home = Go home
