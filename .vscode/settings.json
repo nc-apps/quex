@@ -8,10 +8,14 @@
     "getrandom",
     "Hmac",
     "jsonwebtoken",
+    "langid",
     "libsql",
+    "locid",
     "quex",
     "reqwest",
     "thiserror",
-    "turso"
+    "turso",
+    "unic-langid",
+    "unic_langid"
   ]
 }

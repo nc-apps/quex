@@ -1,5 +1,6 @@
 use crate::auth::authenticated_user::AuthenticatedUser;
 use crate::database::StatementError;
+use crate::preferred_language::PreferredLanguage;
 use crate::routes::create_share_link;
 use crate::AppState;
 use askama::Template;
@@ -12,6 +13,7 @@ use reqwest::StatusCode;
 use serde::Deserialize;
 use std::sync::Arc;
 use time::OffsetDateTime;
+use unic_langid::LanguageIdentifier;
 
 use super::{
     create_csv_download_headers, CreateSurveyError, DownloadResultsError, GetResultsPageError,
@@ -21,10 +23,11 @@ use super::{
 #[template(path = "surveys/responses/net promoter score.html")]
 struct NpsTemplate {
     id: Arc<str>,
+    language: LanguageIdentifier,
 }
 
-pub(super) fn get_page(id: Arc<str>) -> askama_axum::Response {
-    let nps_template = NpsTemplate { id };
+pub(super) fn get_page(id: Arc<str>, language: LanguageIdentifier) -> askama_axum::Response {
+    let nps_template = NpsTemplate { id, language };
 
     nps_template.into_response()
 }
@@ -58,13 +61,19 @@ pub(super) async fn create_response(
 pub(super) async fn create_new_survey(
     State(state): State<AppState>,
     user: AuthenticatedUser,
+    PreferredLanguage(language): PreferredLanguage,
     name: Option<String>,
 ) -> Result<Redirect, CreateSurveyError> {
     let survey_id = nanoid!();
 
     let name: Arc<str> = match name.as_deref() {
         // Use the first 6 characters of the survey id as the name if no name is provided
-        Some("") | None => format!("Net Promoter Score Survey {}", &survey_id[..7]).into(),
+        Some("") | None => format!(
+            "Net Promoter Score {} {}",
+            &survey_id[..7],
+            crate::translate("Survey", &language)
+        )
+        .into(),
         Some(name) => name.into(),
     };
 
@@ -91,6 +100,7 @@ struct NetPromoterScoreResultsTemplate {
     name: Arc<str>,
     answers: Vec<(i32, Option<String>)>,
     survey_url: String,
+    language: LanguageIdentifier,
 }
 
 /// Gets the details page that displays the results of the survey and gives insights to the responses
@@ -98,6 +108,7 @@ pub(super) async fn get_results_page(
     State(state): State<AppState>,
     Path(survey_id): Path<Arc<str>>,
     user: AuthenticatedUser,
+    PreferredLanguage(language): PreferredLanguage,
 ) -> Result<impl IntoResponse, GetResultsPageError> {
     let survey_name = state
         .database
@@ -122,6 +133,7 @@ pub(super) async fn get_results_page(
         name: survey_name,
         answers: responses,
         survey_url,
+        language,
     }
     .into_response())
 }

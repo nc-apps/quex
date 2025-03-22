@@ -18,7 +18,7 @@
                                 d="M9.293 2.293a1 1 0 0 1 1.414 0l7 7A1 1 0 0 1 17 11h-1v6a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1v-3a1 1 0 0 0-1-1H9a1 1 0 0 0-1 1v3a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-6H3a1 1 0 0 1-.707-1.707l7-7Z"
                                 clip-rule="evenodd" />
                         </svg>
-                        <span class="sr-only">Home</span>
+                        <span class="sr-only">{{ crate::translate("home", language) }}</span>
                     </a>
                 </div>
             </li>
@@ -30,7 +30,9 @@
                             d="M8.22 5.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06-1.06L11.94 10 8.22 6.28a.75.75 0 0 1 0-1.06Z"
                             clip-rule="evenodd" />
                     </svg>
-                    <a href="/surveys" class="ml-4 text-sm font-medium text-gray-500 hover:text-gray-700">Surveys</a>
+                    <a href="/surveys" class="ml-4 text-sm font-medium text-gray-500 hover:text-gray-700">
+                        {{ crate::translate("surveys", language) }}
+                    </a>
                 </div>
             </li>
             <li>
@@ -41,43 +43,60 @@
                             d="M8.22 5.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06-1.06L11.94 10 8.22 6.28a.75.75 0 0 1 0-1.06Z"
                             clip-rule="evenodd" />
                     </svg>
-                    <a href="/surveys/ad/{{ id }}" class="ml-4 text-sm font-medium text-gray-500 hover:text-gray-700">{{
-                        name
-                        }}</a>
+                    <a href="/surveys/ad/{{ id }}" class="ml-4 text-sm font-medium text-gray-500 hover:text-gray-700">
+                        {{ name }}
+                    </a>
                 </div>
             </li>
         </ol>
     </nav>
 
     <div>
-        <div class="px-4 mt-3 sm:px-0">
-            <h1 class="text-base font-semibold leading-7 text-gray-900">Survey Information</h1>
-            <p class="max-w-2xl mt-1 text-sm leading-6 text-gray-500">Survey details and responses.</p>
-        </div>
+        <h1 class="px-4 mt-3 text-base font-semibold leading-7 text-gray-900 sm:px-0">
+            {{ crate::translate("survey-details", language) }}
+        </h1>
         <div class="mt-6 border-t border-gray-100">
             <dl class="divide-y divide-gray-100">
                 <div class="px-4 py-6 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-0">
-                    <dt class="text-sm font-medium leading-6 text-gray-900">Name</dt>
-                    <dd class="mt-1 text-sm leading-6 text-gray-700 sm:col-span-2 sm:mt-0">{{ name }}</dd>
+                    <dt class="text-sm font-medium leading-6 text-gray-900">
+                        {{ crate::translate("survey-name", language) }}
+                    </dt>
+                    <dd class="mt-1 text-sm leading-6 text-gray-700 sm:col-span-2 sm:mt-0">
+                        {{ name }}
+                    </dd>
                 </div>
                 <div class="px-4 py-6 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-0">
-                    <dt class="text-sm font-medium leading-6 text-gray-900">Type</dt>
-                    <dd class="mt-1 text-sm leading-6 text-gray-700 sm:col-span-2 sm:mt-0">AttrakDiff</dd>
+                    <dt class="text-sm font-medium leading-6 text-gray-900">
+                        {{ crate::translate("survey-type", language) }}
+                    </dt>
+                    <dd class="mt-1 text-sm leading-6 text-gray-700 sm:col-span-2 sm:mt-0">
+                        AttrakDiff
+                    </dd>
                 </div>
                 <div class="px-4 py-6 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-0">
-                    <dt class="text-sm font-medium leading-6 text-gray-900">Total Responses</dt>
+                    <dt class="text-sm font-medium leading-6 text-gray-900">
+                        {{ crate::translate("survey-total-responses", language) }}
+                    </dt>
                     {# TODO this does not work anymore when paging is introduced #}
-                    <dd class="mt-1 text-sm leading-6 text-gray-700 sm:col-span-2 sm:mt-0">{{ responses.len() }}</dd>
+                    <dd class="mt-1 text-sm leading-6 text-gray-700 sm:col-span-2 sm:mt-0">
+                        {{ responses.len() }}
+                    </dd>
                 </div>
                 <div class="px-4 py-6 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-0">
-                    <dt class="text-sm font-medium leading-6 text-gray-900">Response link</dt>
+                    <dt class="text-sm font-medium leading-6 text-gray-900">
+                        {{ crate::translate("survey-response-link", language) }}
+                    </dt>
                     {# TODO this does not work anymore when paging is introduced #}
                     <dd
                         class="flex items-center gap-4 mt-1 text-sm leading-6 text-gray-700 align-middle sm:col-span-2 sm:mt-0 ">
 
-                        <a class="content-center leading-6 text-blue-600" href="{{ survey_url }}">{{ survey_url }}</a>
+                        <a class="content-center leading-6 text-blue-600" href="{{ survey_url }}">
+                            {{ survey_url }}
+                        </a>
                         <button onclick="navigator.clipboard.writeText('{{ survey_url }}')" class="text-gray-700">
-                            <span class="sr-only">Copy Link</span>
+                            <span class="sr-only">
+                                {{ crate::translate("survey-copy-link", language) }}
+                            </span>
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
                                 stroke="currentColor" class="size-6">
                                 <path stroke-linecap="round" stroke-linejoin="round"
@@ -90,8 +109,9 @@
         </div>
     </div>
     <a class="inline-flex items-center px-3 py-2 mt-4 text-sm font-semibold text-white bg-blue-600 rounded-md shadow-sm md:mt-0 hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
-        download="ad_results_{{ id }}.csv" href="/surveys/ad/{{ id }}/download">Dowload
-        CSV</a>
+        download="ad_results_{{ id }}.csv" href="/surveys/ad/{{ id }}/download">
+        {{ crate::translate("survey-download-csv", language) }}
+    </a>
     <div class="px-4 sm:px-6 lg:px-8">
         <div class="flow-root mt-8">
             <div class="-mx-4 -my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
@@ -100,83 +120,119 @@
                         <thead>
                             <tr>
                                 <th scope="col"
-                                    class="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-0">Human
-                                    -
-                                    Technical</th>
-                                <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
-                                    Isolating
-                                    - Connective</th>
-                                <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
-                                    Pleasant -
-                                    Unpleasant</th>
-                                <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
-                                    Inventive
-                                    - Conventional</th>
-                                <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Simple
-                                    -
-                                    Complicated</th>
-                                <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
-                                    Professional - Unprofessional</th>
-                                <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Ugly -
-                                    Attractive</th>
-                                <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
-                                    Practical
-                                    - Impractical</th>
-                                <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
-                                    Likable -
-                                    Disagreeable</th>
-                                <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
-                                    Cumbersome
-                                    - Straightforward</th>
-                                <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
-                                    Stylish -
-                                    Tacky</th>
-                                <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
-                                    Predictable - Unpredictable</th>
-                                <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Cheap
-                                    -
-                                    Premium</th>
-                                <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
-                                    Alienating
-                                    - Integrating</th>
-                                <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Brings
-                                    me
-                                    closer to people - Separates me from people</th>
-                                <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
-                                    Unpresentable - Respondents</th>
-                                <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
-                                    Rejecting
-                                    - Inviting</th>
-                                <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
-                                    Unimaginative - Creative</th>
-                                <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Good -
-                                    Bad
+                                    class="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-0">
+                                    {{ crate::translate("attrakdiff-human", language) }} - {{
+                                    crate::translate("attrakdiff-technical", language) }}
                                 </th>
                                 <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
-                                    Confusing
-                                    - Clearly structured</th>
+                                    {{ crate::translate("attrakdiff-isolating", language) }} - {{
+                                    crate::translate("attrakdiff-connective", language) }}
+                                </th>
                                 <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
-                                    Repelling
-                                    - Appealing</th>
-                                <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Bold -
-                                    Cautious</th>
+                                    {{ crate::translate("attrakdiff-pleasant", language) }} - {{
+                                    crate::translate("attrakdiff-unpleasant", language) }}
+                                </th>
                                 <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
-                                    Innovative
-                                    - Conservative</th>
-                                <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Dull -
-                                    Captivating</th>
+                                    {{ crate::translate("attrakdiff-inventive", language) }} - {{
+                                    crate::translate("attrakdiff-conventional", language) }}
+                                </th>
                                 <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
-                                    Undemanding - Challenging</th>
+                                    {{ crate::translate("attrakdiff-simple", language) }} - {{
+                                    crate::translate("attrakdiff-complicated", language) }}
+                                </th>
                                 <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
-                                    Motivating
-                                    - Discouraging</th>
-                                <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Novel
-                                    -
-                                    Ordinary</th>
+                                    {{ crate::translate("attrakdiff-professional", language) }} - {{
+                                    crate::translate("attrakdiff-unprofessional", language) }}
+                                </th>
+                                <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                                    {{ crate::translate("attrakdiff-ugly", language) }} - {{
+                                    crate::translate("attrakdiff-attractive", language) }}
+                                </th>
+                                <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                                    {{ crate::translate("attrakdiff-practical", language) }} - {{
+                                    crate::translate("attrakdiff-impractical", language) }}
+                                </th>
+                                <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                                    {{ crate::translate("attrakdiff-likable", language) }} - {{
+                                    crate::translate("attrakdiff-disagreeable", language) }}
+                                </th>
+                                <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                                    {{ crate::translate("attrakdiff-cumbersome", language) }} - {{
+                                    crate::translate("attrakdiff-straightforward", language) }}
+                                </th>
+                                <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                                    {{ crate::translate("attrakdiff-stylish", language) }} - {{
+                                    crate::translate("attrakdiff-tacky", language) }}
+                                </th>
+                                <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                                    {{ crate::translate("attrakdiff-predictable", language) }} - {{
+                                    crate::translate("attrakdiff-unpredictable", language) }}
+                                </th>
+                                <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                                    {{ crate::translate("attrakdiff-cheap", language) }} - {{
+                                    crate::translate("attrakdiff-premium", language) }}
+                                </th>
+                                <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                                    {{ crate::translate("attrakdiff-alienating", language) }} - {{
+                                    crate::translate("attrakdiff-integrating", language) }}
+                                </th>
+                                <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                                    {{ crate::translate("attrakdiff-brings-me-closer-to-people", language) }} - {{
+                                    crate::translate("attrakdiff-separates-me-from-people", language) }}
+                                </th>
+                                <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                                    {{ crate::translate("attrakdiff-unpresentable", language) }} - {{
+                                    crate::translate("attrakdiff-presentable", language) }}
+                                </th>
+                                <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                                    {{ crate::translate("attrakdiff-rejecting", language) }} - {{
+                                    crate::translate("attrakdiff-inviting", language) }}
+                                </th>
+                                <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                                    {{ crate::translate("attrakdiff-unimaginative", language) }} - {{
+                                    crate::translate("attrakdiff-creative", language) }}
+                                </th>
+                                <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                                    {{ crate::translate("attrakdiff-good", language) }} - {{
+                                    crate::translate("attrakdiff-bad", language) }}
+                                </th>
+                                <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                                    {{ crate::translate("attrakdiff-confusing", language) }} - {{
+                                    crate::translate("attrakdiff-clearly-structured", language) }}
+                                </th>
+                                <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                                    {{ crate::translate("attrakdiff-repelling", language) }} - {{
+                                    crate::translate("attrakdiff-appealing", language) }}
+                                </th>
+                                <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                                    {{ crate::translate("attrakdiff-bold", language) }} - {{
+                                    crate::translate("attrakdiff-cautious", language) }}
+                                </th>
+                                <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                                    {{ crate::translate("attrakdiff-innovative", language) }} - {{
+                                    crate::translate("attrakdiff-conservative", language) }}
+                                </th>
+                                <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                                    {{ crate::translate("attrakdiff-dull", language) }} - {{
+                                    crate::translate("attrakdiff-captivating", language) }}
+                                </th>
+                                <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                                    {{ crate::translate("attrakdiff-undemanding", language) }} - {{
+                                    crate::translate("attrakdiff-challenging", language) }}
+                                </th>
+                                <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                                    {{ crate::translate("attrakdiff-motivating", language) }} - {{
+                                    crate::translate("attrakdiff-discouraging", language) }}
+                                </th>
+                                <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                                    {{ crate::translate("attrakdiff-novel", language) }} - {{
+                                    crate::translate("attrakdiff-ordinary", language) }}
+                                </th>
                                 <th scope="col"
                                     class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 pr-4 sm:pr-0">
-                                    Unruly -
-                                    Manageable</th>
+                                    {{ crate::translate("attrakdiff-unruly", language) }} - {{
+                                    crate::translate("attrakdiff-manageable", language) }}
+                                </th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-200">

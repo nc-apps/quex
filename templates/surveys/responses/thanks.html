@@ -1,13 +1,19 @@
 {% extends "layouts/base.html" %}
 
-{% block title %}Thank you!{% endblock %}
+{% block title %}
+{{ crate::translate("thanks-title", language) }}
+{% endblock %}
 
 {% block content %}
 
 <main class="content-center h-dvh justify-items-center">
     <hgroup>
-        <h1 class="text-3xl font-bold">Thanks for submitting your response!</h1>
-        <p>The researchers received your response</p>
+        <h1 class="text-3xl font-bold">
+            {{ crate::translate("thanks-title", language) }}
+        </h1>
+        <p>
+            {{ crate::translate("thanks-subtitle", language) }}
+        </p>
         {# TODO add funny Kangaroo jumping GIF and joke #}
     </hgroup>
 </main>

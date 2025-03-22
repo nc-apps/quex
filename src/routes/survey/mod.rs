@@ -1,5 +1,8 @@
 use crate::auth::authenticated_user::AuthenticatedUser;
-use crate::database::{MultiRowQueryError, SingleRowQueryError, StatementError, SurveyType};
+use crate::database::{
+    MultiRowQueryError, SingleRowQueryError, StatementError, Survey, SurveyType, Surveys,
+};
+use crate::preferred_language::PreferredLanguage;
 use crate::{database, AppState};
 use askama::Template;
 use askama_axum::IntoResponse;
@@ -12,8 +15,10 @@ use axum::{Form, Router};
 use reqwest::header::{self, InvalidHeaderValue};
 use serde::Deserialize;
 use std::fmt::Debug;
+use std::str::FromStr;
 use std::sync::Arc;
 use time::OffsetDateTime;
+use unic_langid::LanguageIdentifier;
 
 pub(crate) mod attrakdiff;
 pub(crate) mod net_promoter_score;
@@ -56,33 +61,29 @@ pub(crate) fn create_router() -> Router<AppState> {
         .route("/q/:survey_id", get(get_survey_page).post(create_response))
 }
 
-/// Represents a survey in the surveys overview page and list.
-pub(crate) struct Survey {
-    pub(crate) id: Arc<str>,
-    pub(crate) name: Arc<str>,
-    pub(crate) created_human_readable: String,
-    pub(crate) created_machine_readable: String,
+struct Entry {
+    survey: Survey,
+    created_human_readable: String,
+    created_machine_readable: String,
 }
-
-/// Contains vectors for each survey type with the survey ids
-#[derive(Default)]
-pub(crate) struct Surveys {
-    pub(crate) attrakdiff: Vec<Survey>,
-    pub(crate) net_promoter_score: Vec<Survey>,
-    pub(crate) system_usability_score: Vec<Survey>,
-}
-
 /// The HTML template for the surveys overview page
 #[derive(Template)]
 #[template(path = "surveys/index.html")]
 struct SurveysTemplate {
-    surveys: Surveys,
+    attrakdiff_surveys: Vec<Entry>,
+    net_promoter_score_surveys: Vec<Entry>,
+    system_usability_score_surveys: Vec<Entry>,
+    language: LanguageIdentifier,
 }
 
 #[derive(thiserror::Error, Debug)]
 pub(crate) enum GetSurveysPageError {
     #[error("Error reading surveys from database: {0}")]
-    DatabaseError(#[from] database::GetUserSurveysError),
+    Database(#[from] database::GetUserSurveysError),
+    #[error("Error formatting date")]
+    Format(#[from] time::error::Format),
+    #[error("Error formatting date for humans: {0}")]
+    HumanReadableDate(#[from] FormatDateError),
 }
 
 impl IntoResponse for GetSurveysPageError {
@@ -96,10 +97,49 @@ impl IntoResponse for GetSurveysPageError {
 async fn get_surveys_page(
     State(state): State<AppState>,
     user: AuthenticatedUser,
-) -> Result<askama_axum::Response, GetSurveysPageError> {
-    let surveys = state.database.get_user_surveys(&user.id).await?;
-    let surveys_template = SurveysTemplate { surveys };
-    Ok(surveys_template.into_response())
+    PreferredLanguage(language): PreferredLanguage,
+) -> Result<SurveysTemplate, GetSurveysPageError> {
+    let Surveys {
+        attrakdiff,
+        net_promoter_score,
+        system_usability_score,
+    } = state.database.get_user_surveys(&user.id).await?;
+
+    // More information on the correct datetime format
+    // - https://html.spec.whatwg.org/multipage/text-level-semantics.html#datetime-value
+    // - https://html.spec.whatwg.org/multipage/common-microsyntaxes.html#valid-local-date-and-time-string
+    // ISO 8601 format should be fine though 🥴
+    let to_entry = |survey: Survey| -> Result<Entry, GetSurveysPageError> {
+        Ok(Entry {
+            created_human_readable: format_date(survey.created_at_utc, &language)?,
+            created_machine_readable: survey
+                .created_at_utc
+                .format(&time::format_description::well_known::Iso8601::DEFAULT)?,
+            survey,
+        })
+    };
+
+    let attrakdiff_surveys = attrakdiff
+        .into_iter()
+        .map(to_entry)
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let net_promoter_score_surveys = net_promoter_score
+        .into_iter()
+        .map(to_entry)
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let system_usability_score_surveys = system_usability_score
+        .into_iter()
+        .map(to_entry)
+        .collect::<Result<Vec<_>, _>>()?;
+
+    Ok(SurveysTemplate {
+        attrakdiff_surveys,
+        net_promoter_score_surveys,
+        system_usability_score_surveys,
+        language,
+    })
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -188,6 +228,7 @@ impl IntoResponse for GetSurveyError {
 async fn get_survey_page(
     State(state): State<AppState>,
     Path(survey_id): Path<Arc<str>>,
+    PreferredLanguage(language): PreferredLanguage,
 ) -> Result<Response, GetSurveyError> {
     // Get survey to check if it even exists
     let survey_type = state.database.get_survey_type(&survey_id).await?;
@@ -199,18 +240,20 @@ async fn get_survey_page(
     };
 
     Ok(match survey_type {
-        SurveyType::Attrakdiff => attrakdiff::get_page(survey_id),
-        SurveyType::NetPromoterScore => net_promoter_score::get_page(survey_id),
-        SurveyType::SystemUsabilityScore => system_usability_score::get_page(survey_id),
+        SurveyType::Attrakdiff => attrakdiff::get_page(survey_id, language),
+        SurveyType::NetPromoterScore => net_promoter_score::get_page(survey_id, language),
+        SurveyType::SystemUsabilityScore => system_usability_score::get_page(survey_id, language),
     })
 }
 
 #[derive(Template)]
 #[template(path = "surveys/new.html")]
-struct NewSurveyTemplate;
+struct NewSurveyTemplate {
+    language: LanguageIdentifier,
+}
 
-async fn get_new_survey_page() -> impl IntoResponse {
-    NewSurveyTemplate {}.into_response()
+async fn get_new_survey_page(PreferredLanguage(language): PreferredLanguage) -> impl IntoResponse {
+    NewSurveyTemplate { language }.into_response()
 }
 
 #[derive(Deserialize, Debug)]
@@ -237,25 +280,30 @@ impl IntoResponse for CreateSurveyError {
 async fn create_survey(
     state: State<AppState>,
     user: AuthenticatedUser,
+    language: PreferredLanguage,
     Form(request): Form<CreateSurveyRequest>,
 ) -> Result<Redirect, CreateSurveyError> {
     match request.r#type {
-        SurveyType::Attrakdiff => attrakdiff::create_new_survey(state, user, request.name).await,
+        SurveyType::Attrakdiff => {
+            attrakdiff::create_new_survey(state, user, language, request.name).await
+        }
         SurveyType::NetPromoterScore => {
-            net_promoter_score::create_new_survey(state, user, request.name).await
+            net_promoter_score::create_new_survey(state, user, language, request.name).await
         }
         SurveyType::SystemUsabilityScore => {
-            system_usability_score::create_new_survey(state, user, request.name).await
+            system_usability_score::create_new_survey(state, user, language, request.name).await
         }
     }
 }
 
 #[derive(Template)]
 #[template(path = "surveys/responses/thanks.html")]
-struct ThanksTemplate {}
+struct ThanksTemplate {
+    language: LanguageIdentifier,
+}
 
-async fn thanks() -> impl IntoResponse {
-    ThanksTemplate {}.into_response()
+async fn thanks(PreferredLanguage(language): PreferredLanguage) -> impl IntoResponse {
+    ThanksTemplate { language }.into_response()
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -266,7 +314,10 @@ pub(crate) enum FormatDateError {
     Format(icu::calendar::CalendarError),
 }
 
-pub(crate) fn format_date(date: OffsetDateTime) -> Result<String, FormatDateError> {
+pub(crate) fn format_date(
+    date: OffsetDateTime,
+    identifier: &LanguageIdentifier,
+) -> Result<String, FormatDateError> {
     // The icu example
     use icu::calendar::{DateTime, Gregorian};
     use icu::datetime::{options::length, DateTimeFormatterOptions, TypedDateTimeFormatter};
@@ -278,9 +329,15 @@ pub(crate) fn format_date(date: OffsetDateTime) -> Result<String, FormatDateErro
         length::Time::Short,
     ));
 
+    // There is probably a way to use the identifier directly
+    let language = identifier.language.as_str();
+    let locale = icu::locid::Locale::from_str(language)
+        .inspect_err(|error| tracing::error!("Error parsing locale \"{}\": {}", language, error))
+        .unwrap_or(locale!("en-US"));
+
     // Can use DateFormatter alternatively to dynamically format date based on accept-language header (see icu crate examples)
     // This uses unicode locale identifiers which might not line up with accept language header but should 99% of the time
-    let formatter = TypedDateTimeFormatter::<Gregorian>::try_new(&locale!("en-US").into(), options)
+    let formatter = TypedDateTimeFormatter::<Gregorian>::try_new(&locale.into(), options)
         .map_err(FormatDateError::CreateFormatter)?;
 
     let date = DateTime::try_new_gregorian_datetime(

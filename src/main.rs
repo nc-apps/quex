@@ -24,8 +24,12 @@ use tracing_subscriber::util::SubscriberInitExt;
 
 mod auth;
 mod database;
+mod preferred_language;
 mod routes;
 mod secret;
+mod translation;
+
+pub(crate) use translation::translate;
 
 #[derive(thiserror::Error, Debug)]
 enum SigningSecretError {
@@ -103,6 +107,7 @@ async fn main() -> Result<(), AppError> {
         .init();
 
     dotenv().ok();
+
     // Secrets
     let secrets = secret::setup().await?;
 
